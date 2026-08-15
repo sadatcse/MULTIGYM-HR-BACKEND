@@ -16,6 +16,7 @@ import { TransactionLoggerMiddleware } from './common/middleware/transaction-log
 import { RolePermissionModule } from './modules/role-permission/role-permission.module';
 import { DepartmentModule } from './modules/department/department.module';
 import { RoleModule } from './modules/role/role.module';
+import { BranchModule } from './modules/branch/branch.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { RoleModule } from './modules/role/role.module';
     RolePermissionModule,
     DepartmentModule,
     RoleModule,
+    BranchModule,
   ],
   controllers: [AppController],
   providers: [TransactionLoggerMiddleware],
