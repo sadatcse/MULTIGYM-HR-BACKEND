@@ -18,6 +18,7 @@ import { DepartmentModule } from './modules/department/department.module';
 import { RoleModule } from './modules/role/role.module';
 import { BranchModule } from './modules/branch/branch.module';
 import { JobPositionModule } from './modules/job-position/job-position.module';
+import { ShiftModule } from './modules/shift/shift.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { JobPositionModule } from './modules/job-position/job-position.module';
     RoleModule,
     BranchModule,
     JobPositionModule,
+    ShiftModule,
   ],
   controllers: [AppController],
   providers: [TransactionLoggerMiddleware],
