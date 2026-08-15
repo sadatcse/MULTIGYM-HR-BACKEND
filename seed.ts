@@ -16,6 +16,14 @@ const seedUsers = [
     photo: 'https://i.ibb.co/sample-avatar.png',
   },
   {
+    name: 'System Administrator',
+    email: 'sadatcse@gmail.com',
+    password: '12345678',
+    role: 'admin',
+    status: 'active',
+    photo: 'https://i.ibb.co/sample-avatar.png',
+  },
+  {
     name: 'General Manager',
     email: 'manager@gmail.com',
     password: 'password123',
