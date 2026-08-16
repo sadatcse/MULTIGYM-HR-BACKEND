@@ -54,8 +54,8 @@ export class Employee {
   })
   email: string;
 
-  @Prop({ required: [true, 'Please provide a password'] })
-  password: string;
+  @Prop({ required: false })
+  password?: string;
 
   @Prop()
   photo?: string;
@@ -125,9 +125,9 @@ export class Employee {
 
 export const EmployeeSchema = SchemaFactory.createForClass(Employee);
 
-// Hash password before saving
+// Hash password before saving if password is supplied & modified
 EmployeeSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
+  if (!this.password || !this.isModified('password')) return next();
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
   next();
@@ -135,6 +135,7 @@ EmployeeSchema.pre('save', async function (next) {
 
 // Compare password instance method
 EmployeeSchema.methods.comparePassword = async function (enteredPassword: string) {
+  if (!this.password) return false;
   return bcrypt.compare(enteredPassword, this.password);
 };
 

@@ -166,8 +166,9 @@ export class EmployeeService {
     }
 
     Object.keys(updateDto).forEach((key) => {
-      if (key === 'password' && !(updateDto as any).password) {
-        return;
+      if (key === 'password') {
+        const val = (updateDto as any).password;
+        if (!val || !String(val).trim()) return;
       }
       (employee as any)[key] = (updateDto as any)[key];
     });
@@ -182,7 +183,7 @@ export class EmployeeService {
         throw new ConflictException('An error occurred: email or employee ID may already be in use.');
       }
       console.error('Error updating employee:', err);
-      throw new Error('An error occurred while updating the employee.');
+      throw new BadRequestException(err.message || 'An error occurred while updating the employee.');
     }
   }
 
