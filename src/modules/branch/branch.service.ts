@@ -114,7 +114,20 @@ export class BranchService {
       }
     }
 
-    return this.branchModel.findByIdAndUpdate(id, updateDto, { new: true, runValidators: true });
+    if (updateDto.operatingHours) {
+      branch.operatingHours = updateDto.operatingHours;
+      branch.markModified('operatingHours');
+    }
+    if (updateDto.name) branch.name = updateDto.name;
+    if (updateDto.order !== undefined) branch.order = updateDto.order;
+    if (updateDto.status) branch.status = updateDto.status;
+    if (updateDto.address) branch.address = updateDto.address;
+    if (updateDto.phone) branch.phone = updateDto.phone;
+    if (updateDto.website !== undefined) branch.website = updateDto.website;
+    if (updateDto.openingTime) branch.openingTime = updateDto.openingTime;
+    if (updateDto.closingTime) branch.closingTime = updateDto.closingTime;
+
+    return branch.save();
   }
 
   async remove(id: string) {

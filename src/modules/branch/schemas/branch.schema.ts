@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, SchemaTypes } from 'mongoose';
 
 export type BranchDocument = Branch & Document;
 
@@ -22,6 +22,26 @@ export class Branch {
 
   @Prop({ trim: true, default: '' })
   website: string;
+
+  @Prop({ trim: true, default: '' })
+  openingTime: string;
+
+  @Prop({ trim: true, default: '' })
+  closingTime: string;
+
+  @Prop({
+    type: SchemaTypes.Mixed,
+    default: {
+      saturday: { open: '', close: '', isClosed: false },
+      sunday: { open: '', close: '', isClosed: false },
+      monday: { open: '', close: '', isClosed: false },
+      tuesday: { open: '', close: '', isClosed: false },
+      wednesday: { open: '', close: '', isClosed: false },
+      thursday: { open: '', close: '', isClosed: false },
+      friday: { open: '', close: '', isClosed: false },
+    },
+  })
+  operatingHours: any;
 }
 
 export const BranchSchema = SchemaFactory.createForClass(Branch);

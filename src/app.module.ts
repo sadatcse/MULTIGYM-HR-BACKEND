@@ -5,7 +5,7 @@ import { InjectConnection, MongooseModule } from '@nestjs/mongoose';
 import { JwtModule } from '@nestjs/jwt';
 import { Connection } from 'mongoose';
 import { AppController } from './app.controller';
-import { UserModule } from './modules/user/user.module';
+import { EmployeeModule } from './modules/user/user.module';
 import { VendorModule } from './modules/vendor/vendor.module';
 import { TransactionLogModule } from './modules/transaction-log/transaction-log.module';
 import {
@@ -19,6 +19,8 @@ import { RoleModule } from './modules/role/role.module';
 import { BranchModule } from './modules/branch/branch.module';
 import { JobPositionModule } from './modules/job-position/job-position.module';
 import { ShiftModule } from './modules/shift/shift.module';
+import { SettingModule } from './modules/setting/setting.module';
+import { GymCalendarModule } from './modules/gym-calendar/gym-calendar.module';
 
 @Module({
   imports: [
@@ -39,10 +41,8 @@ import { ShiftModule } from './modules/shift/shift.module';
         signOptions: { expiresIn: '24h' },
       }),
     }),
-    // Needed here (in addition to TransactionLogModule) so the globally-applied
-    // TransactionLoggerMiddleware can inject the TransactionLog model.
     MongooseModule.forFeature([{ name: TransactionLog.name, schema: TransactionLogSchema }]),
-    UserModule,
+    EmployeeModule,
     VendorModule,
     TransactionLogModule,
     RolePermissionModule,
@@ -51,16 +51,16 @@ import { ShiftModule } from './modules/shift/shift.module';
     BranchModule,
     JobPositionModule,
     ShiftModule,
+    SettingModule,
+    GymCalendarModule,
   ],
   controllers: [AppController],
   providers: [TransactionLoggerMiddleware],
 })
 export class AppModule implements NestModule, OnModuleInit {
-  constructor(@InjectConnection() private readonly connection: Connection) { }
+  constructor(@InjectConnection() private readonly connection: Connection) {}
 
   onModuleInit() {
-    // By the time this module initializes, MongooseModule.forRootAsync has already
-    // awaited the connection, so the 'connected' event has already fired — log directly.
     const message = `MongoDB Connected: ${this.connection.host}` as any;
     console.log(message.underline.green);
   }

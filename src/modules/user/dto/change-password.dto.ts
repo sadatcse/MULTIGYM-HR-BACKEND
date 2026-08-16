@@ -1,11 +1,3 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { ChangePasswordEmployeeDto } from './change-password-employee.dto';
 
-export class ChangePasswordDto {
-  @IsString()
-  @IsNotEmpty()
-  oldPassword: string;
-
-  @IsString()
-  @IsNotEmpty()
-  newPassword: string;
-}
+export class ChangePasswordDto extends ChangePasswordEmployeeDto {}

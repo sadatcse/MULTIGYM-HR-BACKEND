@@ -43,6 +43,7 @@ export class BranchController {
 
   @Patch(':id')
   async update(@Param('id') id: string, @Body() updateBranchDto: UpdateBranchDto) {
+    console.log('BranchController update body:', JSON.stringify(updateBranchDto));
     const data = await this.branchService.update(id, updateBranchDto);
     return { success: true, message: 'Branch updated successfully', data };
   }

@@ -11,6 +11,14 @@ export class CreateShiftDto {
   order: number;
 
   @IsOptional()
+  @IsString()
+  startTime?: string;
+
+  @IsOptional()
+  @IsString()
+  endTime?: string;
+
+  @IsOptional()
   @IsEnum(['active', 'inactive'], { message: 'Status must be active or inactive' })
   status?: string;
 

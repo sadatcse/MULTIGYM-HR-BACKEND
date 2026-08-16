@@ -19,6 +19,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     const err = exception as Error;
     console.error(err);
-    response.status(500).json({ error: err?.message });
+    const message = err?.message || 'Internal server error';
+    response.status(500).json({ statusCode: 500, message, error: message });
   }
 }

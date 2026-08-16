@@ -11,6 +11,12 @@ export class Shift {
   @Prop({ required: [true, 'Order is required'], unique: true, type: Number })
   order: number;
 
+  @Prop({ trim: true, default: '09:00' })
+  startTime: string;
+
+  @Prop({ trim: true, default: '17:00' })
+  endTime: string;
+
   @Prop({ required: true, enum: ['active', 'inactive'], default: 'active' })
   status: string;
 
