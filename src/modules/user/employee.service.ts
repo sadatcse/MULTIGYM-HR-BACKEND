@@ -13,11 +13,13 @@ import { Employee, EmployeeDocument } from './schemas/employee.schema';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { ChangePasswordEmployeeDto } from './dto/change-password-employee.dto';
+import { S3Service } from '../upload/s3.service';
 
 @Injectable()
 export class EmployeeService {
   constructor(
     @InjectModel(Employee.name) private readonly employeeModel: Model<EmployeeDocument>,
+    private readonly s3Service: S3Service,
   ) {}
 
   // Get all employees with multi-field search (including nested address & contact), filters, stats
@@ -156,6 +158,7 @@ export class EmployeeService {
     if (!result) {
       throw new NotFoundException('Employee not found');
     }
+    void this.s3Service.deleteByUrl(result.photo);
     return { message: 'Employee deleted successfully' };
   }
 
@@ -164,6 +167,8 @@ export class EmployeeService {
     if (!employee) {
       throw new NotFoundException('Employee not found');
     }
+
+    const previousPhoto = employee.photo;
 
     Object.keys(updateDto).forEach((key) => {
       if (key === 'password') {
@@ -175,6 +180,9 @@ export class EmployeeService {
 
     try {
       const updated = await employee.save();
+      if (updateDto.photo && updateDto.photo !== previousPhoto) {
+        void this.s3Service.deleteByUrl(previousPhoto);
+      }
       const response: any = updated.toObject();
       delete response.password;
       return response;

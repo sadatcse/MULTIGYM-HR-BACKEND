@@ -29,10 +29,15 @@ async function bootstrap() {
   );
 
   // CORS configuration
-  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
-    'http://localhost:3000',
-    'http://localhost:3001',
-  ];
+  const allowedOrigins = (
+    process.env.ALLOWED_ORIGINS?.split(',') || [
+      'http://localhost:3000',
+      'http://localhost:3001',
+    ]
+  )
+    .map((url) => url.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+
   app.enableCors({
     origin: (origin, callback) => {
       const normalizedOrigin = origin?.endsWith('/') ? origin.slice(0, -1) : origin;

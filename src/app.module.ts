@@ -22,6 +22,7 @@ import { ShiftModule } from './modules/shift/shift.module';
 import { SettingModule } from './modules/setting/setting.module';
 import { GymCalendarModule } from './modules/gym-calendar/gym-calendar.module';
 import { ChatModule } from './modules/chat/chat.module';
+import { UploadModule } from './modules/upload/upload.module';
 
 // 7 New HR Enterprise Modules
 import { LeaveTypeModule } from './modules/leave-type/leave-type.module';
@@ -64,6 +65,7 @@ import { BonusPolicyModule } from './modules/bonus-policy/bonus-policy.module';
     SettingModule,
     GymCalendarModule,
     ChatModule,
+    UploadModule,
     LeaveTypeModule,
     WorkScheduleModule,
     LatePolicyModule,
