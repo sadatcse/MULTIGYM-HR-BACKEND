@@ -28,6 +28,7 @@ async function bootstrap() {
     }),
   );
 
+  // Allowed cross-origin requests for web and mobile clients
   // CORS configuration
   const allowedOrigins = (
     process.env.ALLOWED_ORIGINS?.split(',') || [
