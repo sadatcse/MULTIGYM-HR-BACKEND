@@ -111,6 +111,9 @@ export class Employee {
   @Prop()
   shift?: string;
 
+  @Prop()
+  workSchedule?: string;
+
   @Prop({ default: 'user' })
   role: string;
 

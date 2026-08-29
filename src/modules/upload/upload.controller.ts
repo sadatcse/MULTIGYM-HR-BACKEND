@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, HttpStatus, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Controller, HttpStatus, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { extname } from 'path';
@@ -7,6 +7,11 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 const ALLOWED_IMAGE_TYPES = /jpeg|jpg|png|webp/;
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+
+// Whitelisted upload destinations — never take the S3 folder straight from
+// client input, so a caller can't control the object key path.
+const ALLOWED_FOLDERS = ['employees', 'logos'];
+const DEFAULT_FOLDER = 'employees';
 
 @Controller('upload')
 export class UploadController {
@@ -26,12 +31,13 @@ export class UploadController {
       limits: { fileSize: MAX_IMAGE_SIZE_BYTES },
     }),
   )
-  async uploadImage(@UploadedFile() file: Express.Multer.File) {
+  async uploadImage(@UploadedFile() file: Express.Multer.File, @Query('folder') folder?: string) {
     if (!file) {
       throw new BadRequestException('No image file provided');
     }
 
-    const url = await this.s3Service.uploadImage(file, 'employees');
+    const targetFolder = ALLOWED_FOLDERS.includes(folder || '') ? (folder as string) : DEFAULT_FOLDER;
+    const url = await this.s3Service.uploadImage(file, targetFolder);
 
     return {
       statusCode: HttpStatus.CREATED,

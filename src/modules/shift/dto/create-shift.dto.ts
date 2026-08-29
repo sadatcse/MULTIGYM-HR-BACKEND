@@ -10,13 +10,6 @@ export class CreateShiftDto {
   @Min(1, { message: 'Order must be at least 1' })
   order: number;
 
-  @IsOptional()
-  @IsString()
-  startTime?: string;
-
-  @IsOptional()
-  @IsString()
-  endTime?: string;
 
   @IsOptional()
   @IsEnum(['active', 'inactive'], { message: 'Status must be active or inactive' })

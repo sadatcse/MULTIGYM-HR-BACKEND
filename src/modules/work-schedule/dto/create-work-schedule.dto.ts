@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsNumber, IsOptional, IsEnum, IsArray, Min } from 'class-validator';
+import { IsNotEmpty, IsString, IsNumber, IsOptional, IsEnum, IsArray, IsBoolean, Min } from 'class-validator';
 
 export class CreateWorkScheduleDto {
   @IsNotEmpty({ message: 'Schedule name is required' })
@@ -10,9 +10,29 @@ export class CreateWorkScheduleDto {
   shiftType?: string;
 
   @IsOptional()
+  @IsString()
+  startTime?: string;
+
+  @IsOptional()
+  @IsString()
+  endTime?: string;
+
+  @IsOptional()
   @IsNumber()
-  @Min(1)
+  @Min(0.1)
   workHoursPerDay?: number;
+
+  @IsOptional()
+  @IsString()
+  workHoursFormatted?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isMultiSlot?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  timeSlots?: any[];
 
   @IsOptional()
   @IsNumber()

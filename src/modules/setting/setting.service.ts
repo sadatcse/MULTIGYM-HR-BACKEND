@@ -3,11 +3,13 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Setting, SettingDocument } from './schemas/setting.schema';
 import { UpdateSettingDto } from './dto/update-setting.dto';
+import { S3Service } from '../upload/s3.service';
 
 @Injectable()
 export class SettingService {
   constructor(
     @InjectModel(Setting.name) private readonly settingModel: Model<SettingDocument>,
+    private readonly s3Service: S3Service,
   ) {}
 
   // Get current site settings (or create default single document if empty)
@@ -45,11 +47,20 @@ export class SettingService {
   // Update site settings
   async updateSettings(dto: UpdateSettingDto): Promise<SettingDocument> {
     let settings = await this.settingModel.findOne().exec();
+    const previousLogo = settings?.logo;
+
     if (!settings) {
       settings = new this.settingModel(dto);
     } else {
       Object.assign(settings, dto);
     }
-    return settings.save();
+
+    const saved = await settings.save();
+
+    if (dto.logo && dto.logo !== previousLogo) {
+      void this.s3Service.deleteByUrl(previousLogo);
+    }
+
+    return saved;
   }
 }

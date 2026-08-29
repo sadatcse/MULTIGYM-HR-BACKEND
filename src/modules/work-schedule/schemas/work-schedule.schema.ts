@@ -11,8 +11,38 @@ export class WorkSchedule {
   @Prop({ required: true, trim: true, default: 'General Day Shift' })
   shiftType: string;
 
+  @Prop({ trim: true, default: '09:00' })
+  startTime: string;
+
+  @Prop({ trim: true, default: '17:00' })
+  endTime: string;
+
   @Prop({ required: true, type: Number, default: 8 })
   workHoursPerDay: number;
+
+  @Prop({ trim: true, default: '' })
+  workHoursFormatted: string;
+
+  @Prop({ type: Boolean, default: false })
+  isMultiSlot: boolean;
+
+  @Prop({
+    type: [
+      {
+        slotName: { type: String, default: '' },
+        startTime: { type: String, required: true },
+        endTime: { type: String, required: true },
+        durationMinutes: { type: Number, default: 0 },
+      },
+    ],
+    default: [],
+  })
+  timeSlots: Array<{
+    slotName?: string;
+    startTime: string;
+    endTime: string;
+    durationMinutes?: number;
+  }>;
 
   @Prop({ required: true, type: Number, default: 5 })
   workDaysPerWeek: number;

@@ -126,6 +126,10 @@ export class CreateEmployeeDto {
 
   @IsOptional()
   @IsString()
+  workSchedule?: string;
+
+  @IsOptional()
+  @IsString()
   role?: string;
 
   @IsOptional()

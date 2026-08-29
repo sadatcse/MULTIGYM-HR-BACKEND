@@ -17,7 +17,7 @@ export class ProxyDutyService {
     return newDoc.save();
   }
 
-  async findAll(search?: string, status?: string, page?: number, limit?: number) {
+  async findAll(search?: string, status?: string, month?: string, page?: number, limit?: number) {
     const filter: any = {};
     if (search && search.trim()) {
       filter.$or = [
@@ -28,6 +28,9 @@ export class ProxyDutyService {
     }
     if (status && status !== 'all') {
       filter.status = status;
+    }
+    if (month && month.trim()) {
+      filter.dutyDate = { $regex: `^${month.trim()}` };
     }
 
     const total = await this.proxyDutyModel.countDocuments(filter);

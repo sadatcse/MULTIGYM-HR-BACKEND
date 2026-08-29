@@ -28,12 +28,14 @@ export class ProxyDutyController {
   findAll(
     @Query('search') search?: string,
     @Query('status') status?: string,
+    @Query('month') month?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
     return this.proxyDutyService.findAll(
       search,
       status,
+      month,
       page ? parseInt(page, 10) : undefined,
       limit ? parseInt(limit, 10) : undefined,
     );
