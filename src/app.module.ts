@@ -7,6 +7,7 @@ import { Connection } from 'mongoose';
 import { AppController } from './app.controller';
 import { EmployeeModule } from './modules/user/user.module';
 import { VendorModule } from './modules/vendor/vendor.module';
+import { VendorCategoryModule } from './modules/vendor-category/vendor-category.module';
 import { TransactionLogModule } from './modules/transaction-log/transaction-log.module';
 import {
   TransactionLog,
@@ -55,6 +56,7 @@ import { BonusPolicyModule } from './modules/bonus-policy/bonus-policy.module';
     MongooseModule.forFeature([{ name: TransactionLog.name, schema: TransactionLogSchema }]),
     EmployeeModule,
     VendorModule,
+    VendorCategoryModule,
     TransactionLogModule,
     RolePermissionModule,
     DepartmentModule,

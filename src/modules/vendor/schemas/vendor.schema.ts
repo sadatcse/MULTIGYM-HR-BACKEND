@@ -1,39 +1,65 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
+import { Address, AddressSchema } from '../../user/schemas/employee.schema';
 
 export type VendorDocument = HydratedDocument<Vendor>;
 
+@Schema({ _id: false })
+export class VendorContactPerson {
+  @Prop() name?: string;
+  @Prop() designation?: string;
+  @Prop() phone?: string;
+  @Prop() email?: string;
+}
+export const VendorContactPersonSchema = SchemaFactory.createForClass(VendorContactPerson);
+
+@Schema({ _id: false })
+export class VendorBusinessInfo {
+  @Prop() registrationNumber?: string;
+  @Prop() businessType?: string;
+}
+export const VendorBusinessInfoSchema = SchemaFactory.createForClass(VendorBusinessInfo);
+
 @Schema({ timestamps: true })
 export class Vendor {
-  @Prop({ required: [true, 'Please provide the vendor name'] })
+  @Prop({ required: [true, 'Please provide the vendor/company name'], trim: true, unique: true })
   name: string;
 
-  @Prop({ required: [true, 'Please provide the vendor description'] })
-  description: string;
+  @Prop({ trim: true })
+  category?: string;
 
-  @Prop({ required: [true, 'Please provide the contact person'] })
-  contactPerson: string;
+  @Prop({ type: AddressSchema })
+  address?: Address;
 
-  @Prop({ required: [true, "Please provide the contact person's mobile number"] })
-  contactPersonMobile: string;
+  @Prop({ type: VendorContactPersonSchema })
+  contactPerson1?: VendorContactPerson;
 
-  @Prop({ required: [true, 'Please provide the vendor phone number'] })
-  vendorPhone: string;
+  @Prop({ type: VendorContactPersonSchema })
+  contactPerson2?: VendorContactPerson;
 
-  @Prop({ required: [true, 'Please provide the vendor email'] })
-  vendorEmail: string;
+  @Prop({ type: [String], default: [] })
+  phones: string[];
 
-  @Prop({ required: [true, 'Please provide the vendor address'] })
-  vendorAddress: string;
+  @Prop({ type: [String], default: [] })
+  emails: string[];
 
-  @Prop({ required: [true, 'Please provide the city'] })
-  city: string;
+  @Prop()
+  website?: string;
 
-  @Prop({ required: [true, 'Please provide the trade license'] })
-  tradeLicense: string;
+  @Prop({ type: VendorBusinessInfoSchema })
+  businessInfo?: VendorBusinessInfo;
 
-  @Prop({ type: [String], required: [true, 'Please provide at least one purpose'] })
-  purpose: string[];
+  @Prop()
+  taxVatNumber?: string;
+
+  @Prop({ enum: ['active', 'inactive'], default: 'active' })
+  status: string;
+
+  @Prop({ trim: true, default: '' })
+  notes: string;
 }
 
 export const VendorSchema = SchemaFactory.createForClass(Vendor);
+VendorSchema.index({ name: 1 }, { unique: true });
+VendorSchema.index({ category: 1 });
+VendorSchema.index({ status: 1 });

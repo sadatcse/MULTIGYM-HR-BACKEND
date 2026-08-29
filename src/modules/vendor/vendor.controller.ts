@@ -1,45 +1,40 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpStatus, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { VendorService } from './vendor.service';
 import { CreateVendorDto } from './dto/create-vendor.dto';
 import { UpdateVendorDto } from './dto/update-vendor.dto';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 @Controller('vendor')
+@UseGuards(JwtAuthGuard)
 export class VendorController {
   constructor(private readonly vendorService: VendorService) {}
 
-  // Get all vendors
   @Get()
-  findAll() {
-    return this.vendorService.findAll();
+  async findAll(@Query() query: Record<string, any>) {
+    const result = await this.vendorService.findAll(query);
+    return { statusCode: HttpStatus.OK, message: 'Vendors retrieved successfully', ...result };
   }
 
-  // Get vendor by ID
   @Get('get-id/:id')
-  findById(@Param('id') id: string) {
-    return this.vendorService.findById(id);
+  async findById(@Param('id') id: string) {
+    const data = await this.vendorService.findById(id);
+    return { statusCode: HttpStatus.OK, message: 'Vendor retrieved successfully', data };
   }
 
-  // Create a new vendor
   @Post('post')
-  create(@Body() dto: CreateVendorDto) {
-    return this.vendorService.create(dto);
+  async create(@Body() dto: CreateVendorDto) {
+    const data = await this.vendorService.create(dto);
+    return { statusCode: HttpStatus.CREATED, message: 'Vendor created successfully', data };
   }
 
-  // Update a vendor by ID
   @Put('update/:id')
-  update(@Param('id') id: string, @Body() dto: UpdateVendorDto) {
-    return this.vendorService.update(id, dto);
+  async update(@Param('id') id: string, @Body() dto: UpdateVendorDto) {
+    const data = await this.vendorService.update(id, dto);
+    return { statusCode: HttpStatus.OK, message: 'Vendor updated successfully', data };
   }
 
-  // Delete a vendor by ID
   @Delete('delete/:id')
-  remove(@Param('id') id: string) {
+  async remove(@Param('id') id: string) {
     return this.vendorService.remove(id);
-  }
-
-  // Get paginated vendors
-  @Get('paginate')
-  findPaginated(@Query() query: Record<string, any>) {
-    return this.vendorService.findPaginated(query);
   }
 }

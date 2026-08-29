@@ -1,44 +1,108 @@
-import { ArrayNotEmpty, IsArray, IsNotEmpty, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsArray, IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, ValidateNested } from 'class-validator';
+
+class VendorAddressInputDto {
+  @IsOptional()
+  @IsString()
+  addressLine1?: string;
+
+  @IsOptional()
+  @IsString()
+  addressLine2?: string;
+
+  @IsOptional()
+  @IsString()
+  area?: string;
+
+  @IsOptional()
+  @IsString()
+  division?: string;
+
+  @IsOptional()
+  @IsString()
+  city?: string;
+}
+
+class VendorContactPersonInputDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  designation?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+}
+
+class VendorBusinessInfoInputDto {
+  @IsOptional()
+  @IsString()
+  registrationNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  businessType?: string;
+}
 
 export class CreateVendorDto {
   @IsString()
-  @IsNotEmpty({ message: 'Please provide the vendor name' })
+  @IsNotEmpty({ message: 'Please provide the vendor/company name' })
   name: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'Please provide the vendor description' })
-  description: string;
+  category?: string;
 
-  @IsString()
-  @IsNotEmpty({ message: 'Please provide the contact person' })
-  contactPerson: string;
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => VendorAddressInputDto)
+  address?: VendorAddressInputDto;
 
-  @IsString()
-  @IsNotEmpty({ message: "Please provide the contact person's mobile number" })
-  contactPersonMobile: string;
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => VendorContactPersonInputDto)
+  contactPerson1?: VendorContactPersonInputDto;
 
-  @IsString()
-  @IsNotEmpty({ message: 'Please provide the vendor phone number' })
-  vendorPhone: string;
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => VendorContactPersonInputDto)
+  contactPerson2?: VendorContactPersonInputDto;
 
-  @IsString()
-  @IsNotEmpty({ message: 'Please provide the vendor email' })
-  vendorEmail: string;
-
-  @IsString()
-  @IsNotEmpty({ message: 'Please provide the vendor address' })
-  vendorAddress: string;
-
-  @IsString()
-  @IsNotEmpty({ message: 'Please provide the city' })
-  city: string;
-
-  @IsString()
-  @IsNotEmpty({ message: 'Please provide the trade license' })
-  tradeLicense: string;
-
+  @IsOptional()
   @IsArray()
-  @ArrayNotEmpty({ message: 'Please provide at least one purpose' })
   @IsString({ each: true })
-  purpose: string[];
+  phones?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsEmail({}, { each: true })
+  emails?: string[];
+
+  @IsOptional()
+  @IsString()
+  website?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => VendorBusinessInfoInputDto)
+  businessInfo?: VendorBusinessInfoInputDto;
+
+  @IsOptional()
+  @IsString()
+  taxVatNumber?: string;
+
+  @IsOptional()
+  @IsEnum(['active', 'inactive'], { message: 'Status must be active or inactive' })
+  status?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
 }

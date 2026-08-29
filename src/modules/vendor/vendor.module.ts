@@ -8,5 +8,6 @@ import { VendorController } from './vendor.controller';
   imports: [MongooseModule.forFeature([{ name: Vendor.name, schema: VendorSchema }])],
   controllers: [VendorController],
   providers: [VendorService],
+  exports: [VendorService],
 })
 export class VendorModule {}
