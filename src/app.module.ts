@@ -8,6 +8,7 @@ import { AppController } from './app.controller';
 import { EmployeeModule } from './modules/user/user.module';
 import { VendorModule } from './modules/vendor/vendor.module';
 import { VendorCategoryModule } from './modules/vendor-category/vendor-category.module';
+import { ProductCategoryModule } from './modules/product-category/product-category.module';
 import { TransactionLogModule } from './modules/transaction-log/transaction-log.module';
 import {
   TransactionLog,
@@ -57,6 +58,7 @@ import { BonusPolicyModule } from './modules/bonus-policy/bonus-policy.module';
     EmployeeModule,
     VendorModule,
     VendorCategoryModule,
+    ProductCategoryModule,
     TransactionLogModule,
     RolePermissionModule,
     DepartmentModule,
