@@ -4,10 +4,22 @@ import { Model } from 'mongoose';
 import { Vendor, VendorDocument } from './schemas/vendor.schema';
 import { CreateVendorDto } from './dto/create-vendor.dto';
 import { UpdateVendorDto } from './dto/update-vendor.dto';
+import { VendorPurchaseService } from '../vendor-purchase/vendor-purchase.service';
+import { VendorServiceRecordService } from '../vendor-service/vendor-service.service';
+import { VendorContractService } from '../vendor-contract/vendor-contract.service';
+import { VendorDocumentService } from '../vendor-document/vendor-document.service';
+import { VendorPerformanceService } from '../vendor-performance/vendor-performance.service';
 
 @Injectable()
 export class VendorService {
-  constructor(@InjectModel(Vendor.name) private readonly vendorModel: Model<VendorDocument>) {}
+  constructor(
+    @InjectModel(Vendor.name) private readonly vendorModel: Model<VendorDocument>,
+    private readonly purchaseService: VendorPurchaseService,
+    private readonly serviceRecordService: VendorServiceRecordService,
+    private readonly contractService: VendorContractService,
+    private readonly documentService: VendorDocumentService,
+    private readonly performanceService: VendorPerformanceService,
+  ) {}
 
   async create(dto: CreateVendorDto) {
     const existing = await this.vendorModel.findOne({
@@ -54,10 +66,13 @@ export class VendorService {
       ]),
     ]);
 
+    const ratingMap = await this.performanceService.getAverageRatingMap(data.map((v) => v._id));
+    const dataWithRating = data.map((v) => ({ ...v.toObject(), rating: ratingMap.get(v._id.toString()) ?? null }));
+
     const totalPages = Math.ceil(totalItems / limit) || 1;
 
     return {
-      data,
+      data: dataWithRating,
       total: totalItems,
       totalPages,
       currentPage: page,
@@ -76,7 +91,8 @@ export class VendorService {
     if (!result) {
       throw new NotFoundException('Vendor not found');
     }
-    return result;
+    const rating = await this.performanceService.getAverageRating(id);
+    return { ...result.toObject(), rating };
   }
 
   async update(id: string, dto: UpdateVendorDto) {
@@ -102,5 +118,108 @@ export class VendorService {
       throw new NotFoundException('Vendor not found');
     }
     return { message: 'Vendor deleted successfully' };
+  }
+
+  // 360-view aggregation: everything tied to one vendor in a single
+  // response (Phase 4).
+  async getFullHistory(id: string) {
+    const vendor = await this.findById(id);
+
+    const [purchasesResult, servicesResult, contractsResult, documentsResult, performanceResult] = await Promise.all([
+      this.purchaseService.findAll({ vendor: id, limit: 1000 }),
+      this.serviceRecordService.findAll({ vendor: id, limit: 1000 }),
+      this.contractService.findAll({ vendor: id, limit: 1000 }),
+      this.documentService.findAll({ vendor: id, limit: 1000 }),
+      this.performanceService.findAll({ vendor: id, limit: 1000 }),
+    ]);
+
+    const purchases = purchasesResult.data;
+    const totalSpend = purchases.reduce((sum: number, p: any) => sum + (p.totalPrice || 0), 0);
+    const activeWarrantyCount = purchases.filter((p: any) => p.warrantyStatus === 'active').length;
+    const upcomingServiceCount = servicesResult.data.filter(
+      (s: any) => s.nextServiceDate && new Date(s.nextServiceDate) >= new Date(),
+    ).length;
+
+    return {
+      vendor,
+      purchases,
+      services: servicesResult.data,
+      contracts: contractsResult.data,
+      documents: documentsResult.data,
+      performanceReviews: performanceResult.data,
+      stats: {
+        totalSpend,
+        totalPurchases: purchases.length,
+        activeWarrantyCount,
+        upcomingServiceCount,
+        totalContracts: contractsResult.data.length,
+      },
+    };
+  }
+
+  // Vendor dashboard (Phase 5): counts owned by this service (vendors,
+  // categories) merged with purchase-side spend/trend numbers and
+  // cross-module expiring/upcoming counts.
+  async getDashboardStats() {
+    const [
+      totalVendors,
+      activeVendors,
+      inactiveVendors,
+      categoryBreakdown,
+      purchaseStats,
+      expiringWarranties,
+      expiringContracts,
+      upcomingServices,
+    ] = await Promise.all([
+      this.vendorModel.countDocuments(),
+      this.vendorModel.countDocuments({ status: 'active' }),
+      this.vendorModel.countDocuments({ status: 'inactive' }),
+      this.vendorModel.aggregate([
+        { $match: { category: { $nin: [null, ''] } } },
+        { $group: { _id: '$category', count: { $sum: 1 } } },
+        { $project: { category: '$_id', count: 1, _id: 0 } },
+        { $sort: { count: -1 } },
+      ]),
+      this.purchaseService.getDashboardStats(),
+      this.purchaseService.findExpiringWarranties(),
+      this.contractService.findExpiring(),
+      this.serviceRecordService.findUpcoming(30),
+    ]);
+
+    const expiredContracts = expiringContracts.filter((c: any) => c.status === 'expired').length;
+
+    return {
+      totalVendors,
+      activeVendors,
+      inactiveVendors,
+      totalPurchases: purchaseStats.totalPurchases,
+      totalSpending: purchaseStats.totalSpending,
+      pendingPaymentAmount: purchaseStats.pendingPaymentAmount,
+      pendingPaymentCount: purchaseStats.pendingPaymentCount,
+      expiringWarrantiesCount: expiringWarranties.length,
+      upcomingServicesCount: upcomingServices.length,
+      expiredContractsCount: expiredContracts,
+      categoryWiseVendors: categoryBreakdown,
+      vendorWiseSpending: purchaseStats.vendorWiseSpending,
+      monthlyPurchaseTrend: purchaseStats.monthlyTrend,
+    };
+  }
+
+  // Live-computed reminders (Phase 5) — the actual item lists, not just
+  // counts, for a dashboard alerts panel / notification bell.
+  async getAlerts() {
+    const [expiringWarranties, expiringContracts, upcomingServices, pendingPayments] = await Promise.all([
+      this.purchaseService.findExpiringWarranties(),
+      this.contractService.findExpiring(),
+      this.serviceRecordService.findUpcoming(30),
+      this.purchaseService.findPendingPayments(),
+    ]);
+
+    return {
+      expiringWarranties,
+      expiringContracts,
+      upcomingServices,
+      pendingPayments,
+    };
   }
 }

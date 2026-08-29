@@ -11,7 +11,8 @@
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main",
     "seed": "ts-node -r tsconfig-paths/register seed.ts",
-    "seed:vendor-categories": "ts-node -r tsconfig-paths/register seed-vendor-categories.ts"
+    "seed:vendor-categories": "ts-node -r tsconfig-paths/register seed-vendor-categories.ts",
+    "seed:vendors": "ts-node -r tsconfig-paths/register seed-vendors.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.204.0",

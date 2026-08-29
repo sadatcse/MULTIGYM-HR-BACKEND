@@ -18,6 +18,18 @@ export class S3Service {
   });
 
   async uploadImage(file: Express.Multer.File, folder: string): Promise<string> {
+    return this.putObject(file, folder, 'Image upload failed. Please try again.');
+  }
+
+  // Same mechanics as uploadImage — kept as a separate method (rather than
+  // branching uploadImage) because the caller-facing error copy and, longer
+  // term, any document-specific handling (e.g. virus scanning) are likely
+  // to diverge from the image path.
+  async uploadDocument(file: Express.Multer.File, folder: string): Promise<string> {
+    return this.putObject(file, folder, 'Document upload failed. Please try again.');
+  }
+
+  private async putObject(file: Express.Multer.File, folder: string, errorMessage: string): Promise<string> {
     const key = `${folder}/${uuidv4()}${extname(file.originalname).toLowerCase()}`;
 
     try {
@@ -31,7 +43,7 @@ export class S3Service {
       );
     } catch (err) {
       this.logger.error(`S3 upload failed for key "${key}": ${(err as Error).message}`);
-      throw new InternalServerErrorException('Image upload failed. Please try again.');
+      throw new InternalServerErrorException(errorMessage);
     }
 
     return `${this.publicBaseUrl}/${key}`;

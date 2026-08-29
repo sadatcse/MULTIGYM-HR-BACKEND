@@ -15,10 +15,28 @@ export class VendorController {
     return { statusCode: HttpStatus.OK, message: 'Vendors retrieved successfully', ...result };
   }
 
+  @Get('dashboard-stats')
+  async dashboardStats() {
+    const data = await this.vendorService.getDashboardStats();
+    return { statusCode: HttpStatus.OK, message: 'Vendor dashboard stats retrieved successfully', data };
+  }
+
+  @Get('alerts')
+  async alerts() {
+    const data = await this.vendorService.getAlerts();
+    return { statusCode: HttpStatus.OK, message: 'Vendor alerts retrieved successfully', data };
+  }
+
   @Get('get-id/:id')
   async findById(@Param('id') id: string) {
     const data = await this.vendorService.findById(id);
     return { statusCode: HttpStatus.OK, message: 'Vendor retrieved successfully', data };
+  }
+
+  @Get(':id/full-history')
+  async fullHistory(@Param('id') id: string) {
+    const data = await this.vendorService.getFullHistory(id);
+    return { statusCode: HttpStatus.OK, message: 'Vendor full history retrieved successfully', data };
   }
 
   @Post('post')
