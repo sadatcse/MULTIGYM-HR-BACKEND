@@ -69,6 +69,9 @@ export class VendorPurchase {
   @Prop({ trim: true })
   location?: string;
 
+  @Prop({ trim: true })
+  branch?: string;
+
   @Prop({ type: PurchaseWarrantySchema, default: () => ({}) })
   warranty: PurchaseWarranty;
 }

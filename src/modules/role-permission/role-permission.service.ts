@@ -13,9 +13,22 @@ export class RolePermissionService {
 
   async createOrUpdate(dto: CreateRolePermissionDto) {
     const { role, permissions } = dto;
+    const roleUpper = role.toUpperCase();
+
+    // Merge into the existing stored map rather than replacing it wholesale —
+    // a caller that only sends a subset of module keys (e.g. after a new
+    // module is added and only that module's row is touched) must not wipe
+    // out every other module's previously-saved permissions for this role.
+    const existing = await this.rolePermissionModel.findOne({ role: roleUpper });
+    const existingPermissions = existing
+      ? Object.fromEntries(existing.permissions instanceof Map ? existing.permissions : Object.entries(existing.permissions || {}))
+      : {};
+
+    const mergedPermissions = { ...existingPermissions, ...permissions };
+
     return this.rolePermissionModel.findOneAndUpdate(
-      { role: role.toUpperCase() },
-      { $set: { permissions } },
+      { role: roleUpper },
+      { $set: { permissions: mergedPermissions } },
       { new: true, upsert: true, runValidators: true },
     );
   }

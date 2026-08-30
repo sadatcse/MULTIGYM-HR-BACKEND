@@ -37,6 +37,12 @@ export class VendorServiceRecord {
 
   @Prop({ trim: true })
   remarks?: string;
+
+  @Prop({ trim: true })
+  branch?: string;
+
+  @Prop({ trim: true })
+  department?: string;
 }
 
 export const VendorServiceRecordSchema = SchemaFactory.createForClass(VendorServiceRecord);
