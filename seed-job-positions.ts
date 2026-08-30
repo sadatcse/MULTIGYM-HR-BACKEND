@@ -8,6 +8,13 @@ const JobPositionModel = mongoose.model(JobPosition.name, JobPositionSchema);
 
 const seedPositions = [
   {
+    title: 'Director',
+    order: 0,
+    department: 'Executive Management',
+    description: 'Executive leadership responsible for strategic vision, operational oversight, governance, and corporate growth.',
+    status: 'active',
+  },
+  {
     title: 'Senior Personal Trainer',
     order: 1,
     department: 'Fitness & Training',
@@ -64,12 +71,15 @@ async function seedJobPositions() {
     console.log('Connected to MongoDB successfully.');
 
     for (const posData of seedPositions) {
-      const exists = await JobPositionModel.findOne({ title: posData.title });
-      if (!exists) {
-        await JobPositionModel.create(posData);
-        console.log(`Seeded job position: ${posData.title}`);
-      } else {
-        console.log(`Job position already exists: ${posData.title}`);
+      try {
+        await JobPositionModel.findOneAndUpdate(
+          { title: posData.title },
+          { $setOnInsert: posData },
+          { upsert: true, new: true }
+        );
+        console.log(`Job position checked/upserted: ${posData.title}`);
+      } catch (err: any) {
+        console.log(`Skipped position ${posData.title}: ${err.message}`);
       }
     }
 

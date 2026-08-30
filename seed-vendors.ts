@@ -152,6 +152,151 @@ const fakeVendors = [
     phones: ['+88028871122', '+8801812990011'],
     emails: ['info@carrier.com.bd', 'service@carrier.com.bd'],
   },
+  {
+    name: 'CleanCare Hygiene & Janitorial Supplies',
+    category: 'Sanitation, Janitorial & Hygiene Supplies',
+    website: 'https://www.cleancarebd.com',
+    taxVatNumber: 'BIN-60078192039',
+    status: 'active',
+    notes: 'Supplies commercial disinfectant wipes, automated floor scrubbing machine parts, tissue rolls, and hand sanitizers.',
+    address: {
+      addressLine1: 'Plot 88, Road 4, Sector 7',
+      addressLine2: 'Commercial Hub',
+      area: 'Uttara',
+      city: 'Dhaka',
+      division: 'Dhaka',
+    },
+    contactPerson1: {
+      name: 'Anisur Rahman',
+      designation: 'Corporate Accounts Manager',
+      phone: '+8801712334455',
+      email: 'anis@cleancarebd.com',
+    },
+    contactPerson2: {
+      name: 'Roxana Parvin',
+      designation: 'Logistics Supervisor',
+      phone: '+8801819998877',
+      email: 'logistics@cleancarebd.com',
+    },
+    phones: ['+8809611887766'],
+    emails: ['sales@cleancarebd.com', 'info@cleancarebd.com'],
+  },
+  {
+    name: 'SoundCraft Audio & AV Solutions BD',
+    category: 'Sound, AV & Digital Signage Systems',
+    website: 'https://www.soundcraft.com',
+    taxVatNumber: 'BIN-70089201928',
+    status: 'active',
+    notes: 'Provides high-power studio gym speakers, wireless microphone systems for group fitness, and digital signage displays.',
+    address: {
+      addressLine1: 'Shop 104, Level 3, Eastern Plaza',
+      addressLine2: 'Hatirpool',
+      area: 'Dhanmondi',
+      city: 'Dhaka',
+      division: 'Dhaka',
+    },
+    contactPerson1: {
+      name: 'Kamrul Islam',
+      designation: 'Acoustic Engineer',
+      phone: '+8801912887766',
+      email: 'kamrul@soundcraftbd.com',
+    },
+    contactPerson2: {
+      name: 'Tariqul Hasan',
+      designation: 'AV Installation Technician',
+      phone: '+8801711229988',
+      email: 'support@soundcraftbd.com',
+    },
+    phones: ['+88029668877'],
+    emails: ['info@soundcraftbd.com'],
+  },
+  {
+    name: 'Energy Generator Power Services Ltd.',
+    category: 'Generator & Electrical Power Maintenance',
+    website: 'https://www.energypowerbd.com',
+    taxVatNumber: 'BIN-80099182736',
+    status: 'active',
+    notes: '200 kVA Perkins diesel backup generator servicing, ATS panel maintenance, and heavy electrical load stabilizer.',
+    address: {
+      addressLine1: 'Building 14, Ring Road',
+      addressLine2: 'Shyamoli',
+      area: 'Adabor',
+      city: 'Dhaka',
+      division: 'Dhaka',
+    },
+    contactPerson1: {
+      name: 'Babu Miah',
+      designation: 'Senior Electrical Engineer',
+      phone: '+8801715667788',
+      email: 'babu@energypowerbd.com',
+    },
+    contactPerson2: {
+      name: 'Zahid Hossain',
+      designation: 'Emergency Maintenance Lead',
+      phone: '+8801811445566',
+      email: 'service@energypowerbd.com',
+    },
+    phones: ['+88029112233'],
+    emails: ['service@energypowerbd.com'],
+  },
+  {
+    name: 'Nordic Steam & Sauna Care BD',
+    category: 'Steam Room, Sauna & Spa Maintenance',
+    website: 'https://www.nordicsauna.com',
+    taxVatNumber: 'BIN-90109283745',
+    status: 'active',
+    notes: 'Specialist contractors for commercial steam generators, cedar wood sauna room maintenance, and spa water heaters.',
+    address: {
+      addressLine1: 'House 19, Road 113',
+      addressLine2: 'Gulshan 2',
+      area: 'Gulshan',
+      city: 'Dhaka',
+      division: 'Dhaka',
+    },
+    contactPerson1: {
+      name: 'Suhail Ahmed',
+      designation: 'Spa Equipment Specialist',
+      phone: '+8801733998877',
+      email: 'suhail@nordicsauna.bd',
+    },
+    contactPerson2: {
+      name: 'Arif Chowdhury',
+      designation: 'Service Technician',
+      phone: '+8801911223344',
+      email: 'tech@nordicsauna.bd',
+    },
+    phones: ['+8809678445566'],
+    emails: ['info@nordicsauna.bd'],
+  },
+  {
+    name: 'ActiveFit Apparel & Merchandise BD',
+    category: 'Apparel, Towels & Gym Merchandising',
+    website: 'https://www.activefitbd.com',
+    taxVatNumber: 'BIN-91119283746',
+    status: 'active',
+    notes: 'Custom embroidered staff polo shirts, trainer moisture-wicking tees, branded workout towels, and shaker bottles.',
+    address: {
+      addressLine1: 'Plot 4, Main Road, Section 6',
+      addressLine2: 'Mirpur Commercial Zone',
+      area: 'Mirpur',
+      city: 'Dhaka',
+      division: 'Dhaka',
+    },
+    contactPerson1: {
+      name: 'Nayeem Siddique',
+      designation: 'Merchandiser Lead',
+      phone: '+8801812887744',
+      email: 'nayeem@activefitbd.com',
+    },
+    contactPerson2: {
+      name: 'Shirin Akter',
+      designation: 'Production Coordinator',
+      phone: '+8801711556677',
+      email: 'production@activefitbd.com',
+    },
+    phones: ['+88029001122'],
+    emails: ['orders@activefitbd.com'],
+  },
 ];
 
 async function seedVendors() {
@@ -166,7 +311,7 @@ async function seedVendors() {
     await mongoose.connect(mongoUri);
     console.log('Connected to MongoDB successfully.');
 
-    console.log('Seeding 5 Online Vendors for Gym...');
+    console.log('Seeding 10 Gym Vendors...');
     for (const vendorData of fakeVendors) {
       const existing = await VendorModel.findOne({ name: vendorData.name });
 

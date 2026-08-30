@@ -67,6 +67,36 @@ const fakeVendorCategories = [
     status: 'active',
     description: 'High-capacity diesel backup generator servicing, electrical circuit panel maintenance, and heavy-duty lighting contractors.',
   },
+  {
+    title: 'Plumbing, Water Filtration & Boilers',
+    order: 11,
+    status: 'active',
+    description: 'Contractors for hot water boiler maintenance, commercial water purifiers, drainage lines, and high-pressure shower pumps.',
+  },
+  {
+    title: 'Medical & First Aid Suppliers',
+    order: 12,
+    status: 'active',
+    description: 'Vendors supplying emergency first aid kits, AED defibrillator parts, bandages, cold compresses, and antiseptic sprays.',
+  },
+  {
+    title: 'Locker Lockers & Hardware Accessories',
+    order: 13,
+    status: 'active',
+    description: 'Suppliers of digital combination locker locks, RFID wristbands, master keys, locker hinges, and storage benches.',
+  },
+  {
+    title: 'Marketing, Branding & Print Media',
+    order: 14,
+    status: 'active',
+    description: 'Printing agencies for gym promotional banners, vinyl wall graphics, membership brochures, and LED signboards.',
+  },
+  {
+    title: 'Stationery, Billing & Office Supplies',
+    order: 15,
+    status: 'active',
+    description: 'Suppliers of receipt paper rolls, membership registration pads, office stationery, lamination pouches, and printer toner.',
+  },
 ];
 
 async function seedVendorCategories() {
@@ -81,7 +111,7 @@ async function seedVendorCategories() {
     await mongoose.connect(mongoUri);
     console.log('Connected to MongoDB successfully.');
 
-    console.log('Seeding Gym Vendor Categories...');
+    console.log('Seeding 15 Gym Vendor Categories...');
     for (const cat of fakeVendorCategories) {
       const existing = await VendorCategoryModel.findOne({
         $or: [{ title: cat.title }, { order: cat.order }],
