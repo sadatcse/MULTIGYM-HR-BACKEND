@@ -42,6 +42,7 @@ import { NoticeModule } from './modules/notice/notice.module';
 import { TaskModule } from './modules/task/task.module';
 import { AccountabilityModule } from './modules/accountability/accountability.module';
 import { ManagementPersonModule } from './modules/management-person/management-person.module';
+import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 
 @Module({
   imports: [
@@ -93,6 +94,7 @@ import { ManagementPersonModule } from './modules/management-person/management-p
     TaskModule,
     AccountabilityModule,
     ManagementPersonModule,
+    MaintenanceModule,
   ],
   controllers: [AppController],
   providers: [TransactionLoggerMiddleware],

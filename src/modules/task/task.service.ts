@@ -1394,6 +1394,30 @@ export class TaskService {
       }
     }
 
+    // Month filter handling: supports 'YYYY-MM' (e.g. '2026-09') or separate month/year
+    let startOfMonth: Date | null = null;
+    let endOfMonth: Date | null = null;
+    const monthParam = query?.month ? String(query.month).trim() : null;
+    const yearParam = query?.year ? parseInt(String(query.year), 10) : null;
+
+    if (monthParam && monthParam !== 'all' && monthParam !== 'All Months') {
+      let targetYear = yearParam || new Date().getFullYear();
+      let targetMonth = -1; // 0-indexed: 0 = Jan, 11 = Dec
+
+      if (monthParam.includes('-')) {
+        const [yStr, mStr] = monthParam.split('-');
+        targetYear = parseInt(yStr, 10);
+        targetMonth = parseInt(mStr, 10) - 1;
+      } else {
+        targetMonth = parseInt(monthParam, 10) - 1;
+      }
+
+      if (!isNaN(targetYear) && !isNaN(targetMonth) && targetMonth >= 0 && targetMonth <= 11) {
+        startOfMonth = new Date(targetYear, targetMonth, 1, 0, 0, 0, 0);
+        endOfMonth = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999);
+      }
+    }
+
     if (type === 'source-wise') {
       const pipeline: any[] = [];
       if (hasBranchFilter && branchRegex) {
@@ -1402,6 +1426,18 @@ export class TaskService {
             $or: [
               { branch: { $regex: branchRegex } },
               { branch: 'All Branches' },
+            ],
+          },
+        });
+      }
+      if (startOfMonth && endOfMonth) {
+        pipeline.push({
+          $match: {
+            $or: [
+              { createdAt: { $gte: startOfMonth, $lte: endOfMonth } },
+              { instructionDate: { $gte: startOfMonth, $lte: endOfMonth } },
+              { startDate: { $gte: startOfMonth, $lte: endOfMonth } },
+              { deadline: { $gte: startOfMonth, $lte: endOfMonth } },
             ],
           },
         });
@@ -1463,6 +1499,18 @@ export class TaskService {
         pipeline.push({
           $match: {
             branch: { $regex: branchRegex },
+          },
+        });
+      }
+      if (startOfMonth && endOfMonth) {
+        pipeline.push({
+          $match: {
+            $or: [
+              { createdAt: { $gte: startOfMonth, $lte: endOfMonth } },
+              { instructionDate: { $gte: startOfMonth, $lte: endOfMonth } },
+              { startDate: { $gte: startOfMonth, $lte: endOfMonth } },
+              { deadline: { $gte: startOfMonth, $lte: endOfMonth } },
+            ],
           },
         });
       }
@@ -1546,6 +1594,19 @@ export class TaskService {
                   { 'taskInfo.branch': { $regex: branchRegex } },
                 ],
               },
+            ],
+          },
+        });
+      }
+
+      if (startOfMonth && endOfMonth) {
+        pipeline.push({
+          $match: {
+            $or: [
+              { 'taskInfo.createdAt': { $gte: startOfMonth, $lte: endOfMonth } },
+              { 'taskInfo.instructionDate': { $gte: startOfMonth, $lte: endOfMonth } },
+              { 'taskInfo.startDate': { $gte: startOfMonth, $lte: endOfMonth } },
+              { 'taskInfo.deadline': { $gte: startOfMonth, $lte: endOfMonth } },
             ],
           },
         });

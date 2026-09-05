@@ -20,7 +20,7 @@ const MAX_DOCUMENT_SIZE_BYTES = 15 * 1024 * 1024; // 15 MB
 
 // Whitelisted upload destinations — never take the S3 folder straight from
 // client input, so a caller can't control the object key path.
-const ALLOWED_IMAGE_FOLDERS = ['employees', 'logos', 'notices', 'tasks', 'task-proofs', 'task-attachments'];
+const ALLOWED_IMAGE_FOLDERS = ['employees', 'logos', 'notices', 'tasks', 'task-proofs', 'task-attachments', 'maintenance'];
 const DEFAULT_IMAGE_FOLDER = 'employees';
 const ALLOWED_DOCUMENT_FOLDERS = ['vendor-documents', 'notice-documents', 'notices', 'tasks', 'task-proofs', 'task-attachments'];
 const DEFAULT_DOCUMENT_FOLDER = 'vendor-documents';
