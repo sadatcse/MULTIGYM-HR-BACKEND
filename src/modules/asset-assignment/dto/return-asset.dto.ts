@@ -18,6 +18,9 @@ export class ReturnAssetDto {
   returnNotes?: string;
 
   @IsOptional()
-  @IsEnum(['none', 'damaged', 'lost'])
+  @IsEnum(['none', 'damaged', 'lost', 'repair'])
   damageOrLoss?: string;
+
+  @IsOptional()
+  returnQuantity?: number;
 }

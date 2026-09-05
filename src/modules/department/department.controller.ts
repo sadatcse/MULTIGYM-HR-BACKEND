@@ -1,13 +1,19 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
 import { DepartmentService } from './department.service';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 
 @Controller('department')
+@UseGuards(JwtAuthGuard)
 export class DepartmentController {
   constructor(private readonly departmentService: DepartmentService) {}
 
   @Post()
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('departments', 'add')
   async create(@Body() createDepartmentDto: CreateDepartmentDto) {
     const data = await this.departmentService.create(createDepartmentDto);
     return { success: true, message: 'Department created successfully', data };
@@ -42,12 +48,16 @@ export class DepartmentController {
   }
 
   @Patch(':id')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('departments', 'edit')
   async update(@Param('id') id: string, @Body() updateDepartmentDto: UpdateDepartmentDto) {
     const data = await this.departmentService.update(id, updateDepartmentDto);
     return { success: true, message: 'Department updated successfully', data };
   }
 
   @Delete(':id')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('departments', 'delete')
   async remove(@Param('id') id: string) {
     return this.departmentService.remove(id);
   }

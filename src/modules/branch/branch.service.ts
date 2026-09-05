@@ -4,13 +4,16 @@ import { Model } from 'mongoose';
 import { Branch, BranchDocument } from './schemas/branch.schema';
 import { CreateBranchDto } from './dto/create-branch.dto';
 import { UpdateBranchDto } from './dto/update-branch.dto';
+import { BaseCrudService } from '../../common/services/base-crud.service';
 
 @Injectable()
-export class BranchService {
+export class BranchService extends BaseCrudService<BranchDocument> {
   constructor(
     @InjectModel(Branch.name)
     private readonly branchModel: Model<BranchDocument>,
-  ) {}
+  ) {
+    super(branchModel);
+  }
 
   async create(createDto: CreateBranchDto) {
     const { name, order } = createDto;
@@ -34,29 +37,14 @@ export class BranchService {
   }
 
   async findAll(search?: string, status?: string, page?: number, limit?: number) {
-    const filter: any = {};
-    if (search && search.trim()) {
-      filter.$or = [
-        { name: { $regex: search.trim(), $options: 'i' } },
-        { address: { $regex: search.trim(), $options: 'i' } },
-        { phone: { $regex: search.trim(), $options: 'i' } },
-      ];
-    }
-    if (status && status !== 'all') {
-      filter.status = status;
-    }
-
-    const total = await this.branchModel.countDocuments(filter);
-
-    let query = this.branchModel.find(filter).sort({ order: 1, createdAt: -1 });
-
-    if (page && limit) {
-      const skip = (page - 1) * limit;
-      query = query.skip(skip).limit(limit);
-    }
-
-    const data = await query.exec();
-    const totalPages = limit ? Math.ceil(total / limit) || 1 : 1;
+    const { data, total, page: pageOut, limit: limitOut, totalPages } = await this.findAllBase({
+      search,
+      searchFields: ['name', 'address', 'phone'],
+      status,
+      page,
+      limit,
+      sort: { order: 1, createdAt: -1 },
+    });
 
     // Aggregate system-wide KPI statistics for Branches
     const totalBranches = await this.branchModel.countDocuments();
@@ -68,8 +56,8 @@ export class BranchService {
     return {
       data,
       total,
-      page: page || 1,
-      limit: limit || total,
+      page: pageOut,
+      limit: limitOut,
       totalPages,
       stats: {
         totalBranches,
@@ -81,11 +69,7 @@ export class BranchService {
   }
 
   async findOne(id: string) {
-    const branch = await this.branchModel.findById(id);
-    if (!branch) {
-      throw new NotFoundException(`Branch not found`);
-    }
-    return branch;
+    return this.findOneBase(id, 'Branch');
   }
 
   async update(id: string, updateDto: UpdateBranchDto) {
@@ -131,10 +115,6 @@ export class BranchService {
   }
 
   async remove(id: string) {
-    const result = await this.branchModel.findByIdAndDelete(id);
-    if (!result) {
-      throw new NotFoundException(`Branch not found`);
-    }
-    return { message: 'Branch deleted successfully' };
+    return this.removeBase(id, 'Branch');
   }
 }

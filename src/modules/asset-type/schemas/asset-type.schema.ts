@@ -10,7 +10,7 @@ export class AssetType {
 
   @Prop({
     required: true,
-    enum: ['Uniform & Identification', 'Keys', 'Company Assets'],
+    trim: true,
     default: 'Company Assets',
   })
   category: string;
@@ -33,6 +33,31 @@ export class AssetType {
 
   @Prop({ trim: true, default: '' })
   description: string;
+
+  // Configuration flags
+  @Prop({ default: false })
+  requiresSerialNumber: boolean;
+
+  @Prop({ default: false })
+  requiresSize: boolean;
+
+  @Prop({ default: true })
+  requiresCondition: boolean;
+
+  @Prop({ default: true })
+  requiresEmployeeAssignment: boolean;
+
+  @Prop({ default: false })
+  requiresBranch: boolean;
+
+  @Prop({ default: false })
+  requiresDepartment: boolean;
+
+  @Prop({ default: false })
+  quantityBased: boolean;
+
+  @Prop({ default: false })
+  individualBased: boolean;
 
   // Only meaningful for returnable/tracked items (e.g. re-issue a uniform every 6 months).
   @Prop()

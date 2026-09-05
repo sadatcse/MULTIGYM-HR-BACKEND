@@ -19,7 +19,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     const err = exception as Error;
     console.error(err);
-    const message = err?.message || 'Internal server error';
-    response.status(500).json({ statusCode: 500, message, error: message });
+    // Never forward raw internal error text (driver/Mongo/stack details) to
+    // the client — log it server-side above, return a generic message.
+    response.status(500).json({ statusCode: 500, message: 'Internal server error', error: 'Internal server error' });
   }
 }

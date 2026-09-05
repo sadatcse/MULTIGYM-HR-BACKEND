@@ -1,4 +1,4 @@
-import { IsDateString, IsEnum, IsMongoId, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsDateString, IsEnum, IsMongoId, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateAssetDto {
   @IsMongoId({ message: 'A valid asset type is required' })
@@ -9,8 +9,16 @@ export class CreateAssetDto {
   assetCode: string;
 
   @IsOptional()
+  @IsEnum(['simple', 'variable'])
+  productType?: string;
+
+  @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  returnable?: boolean;
 
   @IsOptional()
   @IsString()
@@ -34,10 +42,29 @@ export class CreateAssetDto {
   condition?: string;
 
   @IsOptional()
-  @IsEnum(['available', 'assigned', 'damaged', 'lost', 'repair', 'disposed'])
+  @IsEnum(['available', 'assigned', 'damaged', 'lost', 'repair', 'disposed', 'low_stock'])
   status?: string;
 
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  minStockThreshold?: number;
+
+  @IsOptional()
+  sizeVariants?: Array<{
+    size: string;
+    variantName?: string;
+    quantityTotal: number;
+    minStockThreshold?: number;
+  }>;
+
+  @IsOptional()
+  attributes?: Array<{
+    name: string;
+    value: string;
+  }>;
 }

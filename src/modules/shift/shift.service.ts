@@ -4,13 +4,16 @@ import { Model } from 'mongoose';
 import { Shift, ShiftDocument } from './schemas/shift.schema';
 import { CreateShiftDto } from './dto/create-shift.dto';
 import { UpdateShiftDto } from './dto/update-shift.dto';
+import { BaseCrudService } from '../../common/services/base-crud.service';
 
 @Injectable()
-export class ShiftService {
+export class ShiftService extends BaseCrudService<ShiftDocument> {
   constructor(
     @InjectModel(Shift.name)
     private readonly shiftModel: Model<ShiftDocument>,
-  ) {}
+  ) {
+    super(shiftModel);
+  }
 
   async create(createDto: CreateShiftDto) {
     const { name, order } = createDto;
@@ -34,28 +37,14 @@ export class ShiftService {
   }
 
   async findAll(search?: string, status?: string, page?: number, limit?: number) {
-    const filter: any = {};
-    if (search && search.trim()) {
-      filter.$or = [
-        { name: { $regex: search.trim(), $options: 'i' } },
-        { description: { $regex: search.trim(), $options: 'i' } },
-      ];
-    }
-    if (status && status !== 'all') {
-      filter.status = status;
-    }
-
-    const total = await this.shiftModel.countDocuments(filter);
-
-    let query = this.shiftModel.find(filter).sort({ order: 1, createdAt: -1 });
-
-    if (page && limit) {
-      const skip = (page - 1) * limit;
-      query = query.skip(skip).limit(limit);
-    }
-
-    const data = await query.exec();
-    const totalPages = limit ? Math.ceil(total / limit) || 1 : 1;
+    const { data, total, page: pageOut, limit: limitOut, totalPages } = await this.findAllBase({
+      search,
+      searchFields: ['name', 'description'],
+      status,
+      page,
+      limit,
+      sort: { order: 1, createdAt: -1 },
+    });
 
     // Aggregate KPI Statistics
     const totalShifts = await this.shiftModel.countDocuments();
@@ -67,8 +56,8 @@ export class ShiftService {
     return {
       data,
       total,
-      page: page || 1,
-      limit: limit || total,
+      page: pageOut,
+      limit: limitOut,
       totalPages,
       stats: {
         totalShifts,
@@ -80,11 +69,7 @@ export class ShiftService {
   }
 
   async findOne(id: string) {
-    const shift = await this.shiftModel.findById(id);
-    if (!shift) {
-      throw new NotFoundException(`Shift not found`);
-    }
-    return shift;
+    return this.findOneBase(id, 'Shift');
   }
 
   async update(id: string, updateDto: UpdateShiftDto) {
@@ -117,10 +102,6 @@ export class ShiftService {
   }
 
   async remove(id: string) {
-    const result = await this.shiftModel.findByIdAndDelete(id);
-    if (!result) {
-      throw new NotFoundException(`Shift not found`);
-    }
-    return { message: 'Shift deleted successfully' };
+    return this.removeBase(id, 'Shift');
   }
 }

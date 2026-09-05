@@ -3,6 +3,10 @@ import { VendorServiceRecordService } from './vendor-service.service';
 import { CreateVendorServiceRecordDto } from './dto/create-vendor-service-record.dto';
 import { UpdateVendorServiceRecordDto } from './dto/update-vendor-service-record.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
+
+import { AddPaymentDto } from '../vendor-purchase/dto/add-payment.dto';
 
 @Controller('vendor-service')
 @UseGuards(JwtAuthGuard)
@@ -28,19 +32,41 @@ export class VendorServiceRecordController {
   }
 
   @Post('post')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('vendor-details', 'add')
   async create(@Body() dto: CreateVendorServiceRecordDto) {
     const data = await this.serviceRecordService.create(dto);
     return { statusCode: HttpStatus.CREATED, message: 'Service record created successfully', data };
   }
 
   @Put('update/:id')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('vendor-details', 'edit')
   async update(@Param('id') id: string, @Body() dto: UpdateVendorServiceRecordDto) {
     const data = await this.serviceRecordService.update(id, dto);
     return { statusCode: HttpStatus.OK, message: 'Service record updated successfully', data };
   }
 
   @Delete('delete/:id')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('vendor-details', 'delete')
   async remove(@Param('id') id: string) {
     return this.serviceRecordService.remove(id);
+  }
+
+  @Post('payment/:id')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('vendor-details', 'edit')
+  async addPayment(@Param('id') id: string, @Body() dto: AddPaymentDto) {
+    const data = await this.serviceRecordService.addPayment(id, dto);
+    return { statusCode: HttpStatus.OK, message: 'Payment recorded successfully', data };
+  }
+
+  @Delete('payment/:id/:paymentId')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('vendor-details', 'delete')
+  async removePayment(@Param('id') id: string, @Param('paymentId') paymentId: string) {
+    const data = await this.serviceRecordService.removePayment(id, paymentId);
+    return { statusCode: HttpStatus.OK, message: 'Payment removed successfully', data };
   }
 }

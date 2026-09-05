@@ -4,13 +4,16 @@ import { Model } from 'mongoose';
 import { ProxyDuty, ProxyDutyDocument } from './schemas/proxy-duty.schema';
 import { CreateProxyDutyDto } from './dto/create-proxy-duty.dto';
 import { UpdateProxyDutyDto } from './dto/update-proxy-duty.dto';
+import { BaseCrudService } from '../../common/services/base-crud.service';
 
 @Injectable()
-export class ProxyDutyService {
+export class ProxyDutyService extends BaseCrudService<ProxyDutyDocument> {
   constructor(
     @InjectModel(ProxyDuty.name)
     private readonly proxyDutyModel: Model<ProxyDutyDocument>,
-  ) {}
+  ) {
+    super(proxyDutyModel);
+  }
 
   async create(createDto: CreateProxyDutyDto) {
     const newDoc = new this.proxyDutyModel(createDto);
@@ -18,30 +21,15 @@ export class ProxyDutyService {
   }
 
   async findAll(search?: string, status?: string, month?: string, page?: number, limit?: number) {
-    const filter: any = {};
-    if (search && search.trim()) {
-      filter.$or = [
-        { originalEmployeeName: { $regex: search.trim(), $options: 'i' } },
-        { proxyEmployeeName: { $regex: search.trim(), $options: 'i' } },
-        { remarks: { $regex: search.trim(), $options: 'i' } },
-      ];
-    }
-    if (status && status !== 'all') {
-      filter.status = status;
-    }
-    if (month && month.trim()) {
-      filter.dutyDate = { $regex: `^${month.trim()}` };
-    }
-
-    const total = await this.proxyDutyModel.countDocuments(filter);
-    let query = this.proxyDutyModel.find(filter).sort({ dutyDate: -1, createdAt: -1 });
-
-    if (page && limit) {
-      query = query.skip((page - 1) * limit).limit(limit);
-    }
-
-    const data = await query.exec();
-    const totalPages = limit ? Math.ceil(total / limit) || 1 : 1;
+    const { data, total, page: pageOut, limit: limitOut, totalPages } = await this.findAllBase({
+      search,
+      searchFields: ['originalEmployeeName', 'proxyEmployeeName', 'remarks'],
+      status,
+      page,
+      limit,
+      sort: { dutyDate: -1, createdAt: -1 },
+      extraFilter: month && month.trim() ? { dutyDate: { $regex: `^${month.trim()}` } } : undefined,
+    });
 
     const totalRecords = await this.proxyDutyModel.countDocuments();
     const activeCount = await this.proxyDutyModel.countDocuments({ status: 'active' });
@@ -49,8 +37,8 @@ export class ProxyDutyService {
     return {
       data,
       total,
-      page: page || 1,
-      limit: limit || total,
+      page: pageOut,
+      limit: limitOut,
       totalPages,
       stats: {
         totalRecords,
@@ -60,9 +48,7 @@ export class ProxyDutyService {
   }
 
   async findOne(id: string) {
-    const doc = await this.proxyDutyModel.findById(id);
-    if (!doc) throw new NotFoundException(`Proxy duty record not found`);
-    return doc;
+    return this.findOneBase(id, 'Proxy duty record');
   }
 
   async update(id: string, updateDto: UpdateProxyDutyDto) {
@@ -72,8 +58,6 @@ export class ProxyDutyService {
   }
 
   async remove(id: string) {
-    const deleted = await this.proxyDutyModel.findByIdAndDelete(id);
-    if (!deleted) throw new NotFoundException(`Proxy duty record not found`);
-    return { message: 'Proxy duty record deleted successfully' };
+    return this.removeBase(id, 'Proxy duty record');
   }
 }

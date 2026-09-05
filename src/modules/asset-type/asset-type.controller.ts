@@ -3,6 +3,8 @@ import { AssetTypeService } from './asset-type.service';
 import { CreateAssetTypeDto } from './dto/create-asset-type.dto';
 import { UpdateAssetTypeDto } from './dto/update-asset-type.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 
 @Controller('asset-type')
 @UseGuards(JwtAuthGuard)
@@ -10,6 +12,8 @@ export class AssetTypeController {
   constructor(private readonly assetTypeService: AssetTypeService) {}
 
   @Post()
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('asset-types', 'add')
   async create(@Body() createDto: CreateAssetTypeDto) {
     const data = await this.assetTypeService.create(createDto);
     return { statusCode: HttpStatus.CREATED, message: 'Asset type created successfully', data };
@@ -45,12 +49,16 @@ export class AssetTypeController {
   }
 
   @Patch(':id')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('asset-types', 'edit')
   async update(@Param('id') id: string, @Body() updateDto: UpdateAssetTypeDto) {
     const data = await this.assetTypeService.update(id, updateDto);
     return { statusCode: HttpStatus.OK, message: 'Asset type updated successfully', data };
   }
 
   @Delete(':id')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('asset-types', 'delete')
   async remove(@Param('id') id: string) {
     return this.assetTypeService.remove(id);
   }

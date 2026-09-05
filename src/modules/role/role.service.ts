@@ -4,13 +4,16 @@ import { Model } from 'mongoose';
 import { Role, RoleDocument } from './schemas/role.schema';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
+import { BaseCrudService } from '../../common/services/base-crud.service';
 
 @Injectable()
-export class RoleService {
+export class RoleService extends BaseCrudService<RoleDocument> {
   constructor(
     @InjectModel(Role.name)
     private readonly roleModel: Model<RoleDocument>,
-  ) {}
+  ) {
+    super(roleModel);
+  }
 
   async create(createDto: CreateRoleDto) {
     const { name, order } = createDto;
@@ -34,25 +37,14 @@ export class RoleService {
   }
 
   async findAll(search?: string, status?: string, page?: number, limit?: number) {
-    const filter: any = {};
-    if (search && search.trim()) {
-      filter.name = { $regex: search.trim(), $options: 'i' };
-    }
-    if (status && status !== 'all') {
-      filter.status = status;
-    }
-
-    const total = await this.roleModel.countDocuments(filter);
-
-    let query = this.roleModel.find(filter).sort({ order: 1, createdAt: -1 });
-
-    if (page && limit) {
-      const skip = (page - 1) * limit;
-      query = query.skip(skip).limit(limit);
-    }
-
-    const data = await query.exec();
-    const totalPages = limit ? Math.ceil(total / limit) || 1 : 1;
+    const { data, total, page: pageOut, limit: limitOut, totalPages } = await this.findAllBase({
+      search,
+      searchFields: ['name'],
+      status,
+      page,
+      limit,
+      sort: { order: 1, createdAt: -1 },
+    });
 
     // Aggregate system-wide KPI statistics for Roles
     const totalRoles = await this.roleModel.countDocuments();
@@ -64,8 +56,8 @@ export class RoleService {
     return {
       data,
       total,
-      page: page || 1,
-      limit: limit || total,
+      page: pageOut,
+      limit: limitOut,
       totalPages,
       stats: {
         totalRoles,
@@ -77,11 +69,7 @@ export class RoleService {
   }
 
   async findOne(id: string) {
-    const role = await this.roleModel.findById(id);
-    if (!role) {
-      throw new NotFoundException(`Role not found`);
-    }
-    return role;
+    return this.findOneBase(id, 'Role');
   }
 
   async update(id: string, updateDto: UpdateRoleDto) {
@@ -114,10 +102,6 @@ export class RoleService {
   }
 
   async remove(id: string) {
-    const result = await this.roleModel.findByIdAndDelete(id);
-    if (!result) {
-      throw new NotFoundException(`Role not found`);
-    }
-    return { message: 'Role deleted successfully' };
+    return this.removeBase(id, 'Role');
   }
 }

@@ -13,6 +13,8 @@ import { LatePolicyService } from './late-policy.service';
 import { CreateLatePolicyDto } from './dto/create-late-policy.dto';
 import { UpdateLatePolicyDto } from './dto/update-late-policy.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 
 @Controller('late-policy')
 @UseGuards(JwtAuthGuard)
@@ -20,6 +22,8 @@ export class LatePolicyController {
   constructor(private readonly latePolicyService: LatePolicyService) {}
 
   @Post()
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('late-policy', 'add')
   create(@Body() createDto: CreateLatePolicyDto) {
     return this.latePolicyService.create(createDto);
   }
@@ -45,11 +49,15 @@ export class LatePolicyController {
   }
 
   @Patch(':id')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('late-policy', 'edit')
   update(@Param('id') id: string, @Body() updateDto: UpdateLatePolicyDto) {
     return this.latePolicyService.update(id, updateDto);
   }
 
   @Delete(':id')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('late-policy', 'delete')
   remove(@Param('id') id: string) {
     return this.latePolicyService.remove(id);
   }

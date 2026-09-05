@@ -4,13 +4,16 @@ import { Model } from 'mongoose';
 import { WorkSchedule, WorkScheduleDocument } from './schemas/work-schedule.schema';
 import { CreateWorkScheduleDto } from './dto/create-work-schedule.dto';
 import { UpdateWorkScheduleDto } from './dto/update-work-schedule.dto';
+import { BaseCrudService } from '../../common/services/base-crud.service';
 
 @Injectable()
-export class WorkScheduleService {
+export class WorkScheduleService extends BaseCrudService<WorkScheduleDocument> {
   constructor(
     @InjectModel(WorkSchedule.name)
     private readonly workScheduleModel: Model<WorkScheduleDocument>,
-  ) {}
+  ) {
+    super(workScheduleModel);
+  }
 
   async create(createDto: CreateWorkScheduleDto) {
     const { scheduleName, order } = createDto;
@@ -32,26 +35,14 @@ export class WorkScheduleService {
   }
 
   async findAll(search?: string, status?: string, page?: number, limit?: number) {
-    const filter: any = {};
-    if (search && search.trim()) {
-      filter.$or = [
-        { scheduleName: { $regex: search.trim(), $options: 'i' } },
-        { shiftType: { $regex: search.trim(), $options: 'i' } },
-      ];
-    }
-    if (status && status !== 'all') {
-      filter.status = status;
-    }
-
-    const total = await this.workScheduleModel.countDocuments(filter);
-    let query = this.workScheduleModel.find(filter).sort({ order: 1, createdAt: -1 });
-
-    if (page && limit) {
-      query = query.skip((page - 1) * limit).limit(limit);
-    }
-
-    const data = await query.exec();
-    const totalPages = limit ? Math.ceil(total / limit) || 1 : 1;
+    const { data, total, page: pageOut, limit: limitOut, totalPages } = await this.findAllBase({
+      search,
+      searchFields: ['scheduleName', 'shiftType'],
+      status,
+      page,
+      limit,
+      sort: { order: 1, createdAt: -1 },
+    });
 
     const totalSchedules = await this.workScheduleModel.countDocuments();
     const activeCount = await this.workScheduleModel.countDocuments({ status: 'active' });
@@ -59,8 +50,8 @@ export class WorkScheduleService {
     return {
       data,
       total,
-      page: page || 1,
-      limit: limit || total,
+      page: pageOut,
+      limit: limitOut,
       totalPages,
       stats: {
         totalSchedules,
@@ -70,9 +61,7 @@ export class WorkScheduleService {
   }
 
   async findOne(id: string) {
-    const doc = await this.workScheduleModel.findById(id);
-    if (!doc) throw new NotFoundException(`Work schedule not found`);
-    return doc;
+    return this.findOneBase(id, 'Work schedule');
   }
 
   async update(id: string, updateDto: UpdateWorkScheduleDto) {
@@ -93,8 +82,6 @@ export class WorkScheduleService {
   }
 
   async remove(id: string) {
-    const deleted = await this.workScheduleModel.findByIdAndDelete(id);
-    if (!deleted) throw new NotFoundException(`Work schedule not found`);
-    return { message: 'Work schedule deleted successfully' };
+    return this.removeBase(id, 'Work schedule');
   }
 }

@@ -108,7 +108,9 @@ async function seedDatabase() {
 
     console.log('Upserting admin & system accounts...');
     for (const empData of seedEmployees) {
-      const existing = await EmployeeModel.findOne({ email: empData.email });
+      const existing = await EmployeeModel.findOne({
+        $or: [{ email: empData.email }, { employeeId: empData.employeeId }],
+      });
       if (existing) {
         Object.assign(existing, empData);
         await existing.save();

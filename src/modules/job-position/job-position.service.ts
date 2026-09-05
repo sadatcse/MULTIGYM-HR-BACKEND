@@ -4,13 +4,16 @@ import { Model } from 'mongoose';
 import { JobPosition, JobPositionDocument } from './schemas/job-position.schema';
 import { CreateJobPositionDto } from './dto/create-job-position.dto';
 import { UpdateJobPositionDto } from './dto/update-job-position.dto';
+import { BaseCrudService } from '../../common/services/base-crud.service';
 
 @Injectable()
-export class JobPositionService {
+export class JobPositionService extends BaseCrudService<JobPositionDocument> {
   constructor(
     @InjectModel(JobPosition.name)
     private readonly jobPositionModel: Model<JobPositionDocument>,
-  ) {}
+  ) {
+    super(jobPositionModel);
+  }
 
   async create(createDto: CreateJobPositionDto) {
     const { title, order } = createDto;
@@ -34,29 +37,14 @@ export class JobPositionService {
   }
 
   async findAll(search?: string, status?: string, page?: number, limit?: number) {
-    const filter: any = {};
-    if (search && search.trim()) {
-      filter.$or = [
-        { title: { $regex: search.trim(), $options: 'i' } },
-        { department: { $regex: search.trim(), $options: 'i' } },
-        { description: { $regex: search.trim(), $options: 'i' } },
-      ];
-    }
-    if (status && status !== 'all') {
-      filter.status = status;
-    }
-
-    const total = await this.jobPositionModel.countDocuments(filter);
-
-    let query = this.jobPositionModel.find(filter).sort({ order: 1, createdAt: -1 });
-
-    if (page && limit) {
-      const skip = (page - 1) * limit;
-      query = query.skip(skip).limit(limit);
-    }
-
-    const data = await query.exec();
-    const totalPages = limit ? Math.ceil(total / limit) || 1 : 1;
+    const { data, total, page: pageOut, limit: limitOut, totalPages } = await this.findAllBase({
+      search,
+      searchFields: ['title', 'department', 'description'],
+      status,
+      page,
+      limit,
+      sort: { order: 1, createdAt: -1 },
+    });
 
     // Aggregate system-wide KPI statistics for Job Positions
     const totalJobPositions = await this.jobPositionModel.countDocuments();
@@ -68,8 +56,8 @@ export class JobPositionService {
     return {
       data,
       total,
-      page: page || 1,
-      limit: limit || total,
+      page: pageOut,
+      limit: limitOut,
       totalPages,
       stats: {
         totalJobPositions,
@@ -81,11 +69,7 @@ export class JobPositionService {
   }
 
   async findOne(id: string) {
-    const position = await this.jobPositionModel.findById(id);
-    if (!position) {
-      throw new NotFoundException(`Job position not found`);
-    }
-    return position;
+    return this.findOneBase(id, 'Job position');
   }
 
   async update(id: string, updateDto: UpdateJobPositionDto) {
@@ -118,10 +102,6 @@ export class JobPositionService {
   }
 
   async remove(id: string) {
-    const result = await this.jobPositionModel.findByIdAndDelete(id);
-    if (!result) {
-      throw new NotFoundException(`Job position not found`);
-    }
-    return { message: 'Job position deleted successfully' };
+    return this.removeBase(id, 'Job position');
   }
 }

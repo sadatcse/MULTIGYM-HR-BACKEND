@@ -44,4 +44,25 @@ export class CreateVendorServiceRecordDto {
   @IsOptional()
   @IsString()
   remarks?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dueDate?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  initialPaymentAmount?: number;
+
+  @IsOptional()
+  @IsString()
+  initialPaymentMethod?: string;
+
+  @IsOptional()
+  @IsString()
+  initialPaymentReference?: string;
+
+  @IsOptional()
+  @IsString()
+  initialPaymentNote?: string;
 }

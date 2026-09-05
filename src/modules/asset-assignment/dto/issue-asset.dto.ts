@@ -8,6 +8,10 @@ export class IssueAssetDto {
   asset: string;
 
   @IsOptional()
+  @IsString()
+  size?: string;
+
+  @IsOptional()
   @IsNumber()
   @Min(1)
   quantity?: number;

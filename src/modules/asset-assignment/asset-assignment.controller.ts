@@ -1,8 +1,11 @@
 import { Body, Controller, Get, HttpStatus, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { AssetAssignmentService } from './asset-assignment.service';
 import { IssueAssetDto } from './dto/issue-asset.dto';
+import { BulkIssueAssetDto } from './dto/bulk-issue-asset.dto';
 import { ReturnAssetDto } from './dto/return-asset.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 
 @Controller('asset-assignment')
 @UseGuards(JwtAuthGuard)
@@ -13,6 +16,12 @@ export class AssetAssignmentController {
   async findAll(@Query() query: Record<string, any>) {
     const result = await this.assignmentService.findAll(query);
     return { statusCode: HttpStatus.OK, message: 'Asset assignments retrieved successfully', ...result };
+  }
+
+  @Get('employee-report')
+  async employeeReport(@Query() query: Record<string, any>) {
+    const result = await this.assignmentService.getEmployeeAssetReport(query);
+    return { statusCode: HttpStatus.OK, message: 'Employee asset report retrieved successfully', ...result };
   }
 
   @Get('pending-returns')
@@ -46,12 +55,24 @@ export class AssetAssignmentController {
   }
 
   @Post('issue')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('assets', 'edit')
   async issue(@Body() dto: IssueAssetDto) {
     const data = await this.assignmentService.issue(dto);
     return { statusCode: HttpStatus.CREATED, message: 'Asset issued successfully', data };
   }
 
+  @Post('bulk-issue')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('assets', 'edit')
+  async bulkIssue(@Body() dto: BulkIssueAssetDto) {
+    const data = await this.assignmentService.bulkIssue(dto);
+    return { statusCode: HttpStatus.CREATED, message: 'Bulk asset assignments completed successfully', data };
+  }
+
   @Put('return/:id')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('assets', 'edit')
   async returnAsset(@Param('id') id: string, @Body() dto: ReturnAssetDto) {
     const data = await this.assignmentService.returnAsset(id, dto);
     return { statusCode: HttpStatus.OK, message: 'Asset returned successfully', data };

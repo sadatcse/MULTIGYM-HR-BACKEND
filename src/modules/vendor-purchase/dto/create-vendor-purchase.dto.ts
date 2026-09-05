@@ -1,8 +1,9 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMinSize,
+  IsArray,
   IsBoolean,
   IsDateString,
-  IsEnum,
   IsMongoId,
   IsNotEmpty,
   IsNumber,
@@ -38,18 +39,7 @@ class PurchaseWarrantyInputDto {
   assetId?: string;
 }
 
-export class CreateVendorPurchaseDto {
-  @IsMongoId({ message: 'A valid vendor is required' })
-  vendor: string;
-
-  @IsDateString()
-  @IsNotEmpty({ message: 'Purchase date is required' })
-  purchaseDate: string;
-
-  @IsOptional()
-  @IsString()
-  invoiceNumber?: string;
-
+export class PurchaseItemInputDto {
   @IsString()
   @IsNotEmpty({ message: 'Product name is required' })
   productName: string;
@@ -72,16 +62,30 @@ export class CreateVendorPurchaseDto {
   unitPrice: number;
 
   @IsOptional()
+  @ValidateNested()
+  @Type(() => PurchaseWarrantyInputDto)
+  warranty?: PurchaseWarrantyInputDto;
+}
+
+export class CreateVendorPurchaseDto {
+  @IsMongoId({ message: 'A valid vendor is required' })
+  vendor: string;
+
+  @IsDateString()
+  @IsNotEmpty({ message: 'Purchase date is required' })
+  purchaseDate: string;
+
+  @IsOptional()
+  @IsString()
+  invoiceNumber?: string;
+
+  @IsOptional()
   @IsString()
   purchaseOrderNumber?: string;
 
   @IsOptional()
-  @IsEnum(['paid', 'partial', 'pending', 'overdue'])
-  paymentStatus?: string;
-
-  @IsOptional()
-  @IsDateString()
-  paymentDate?: string;
+  @IsString()
+  description?: string;
 
   @IsOptional()
   @IsString()
@@ -92,7 +96,29 @@ export class CreateVendorPurchaseDto {
   location?: string;
 
   @IsOptional()
-  @ValidateNested()
-  @Type(() => PurchaseWarrantyInputDto)
-  warranty?: PurchaseWarrantyInputDto;
+  @IsDateString()
+  dueDate?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  initialPaymentAmount?: number;
+
+  @IsOptional()
+  @IsString()
+  initialPaymentMethod?: string;
+
+  @IsOptional()
+  @IsString()
+  initialPaymentReference?: string;
+
+  @IsOptional()
+  @IsString()
+  initialPaymentNote?: string;
+
+  @IsArray()
+  @ArrayMinSize(1, { message: 'At least one product item is required' })
+  @ValidateNested({ each: true })
+  @Type(() => PurchaseItemInputDto)
+  items: PurchaseItemInputDto[];
 }

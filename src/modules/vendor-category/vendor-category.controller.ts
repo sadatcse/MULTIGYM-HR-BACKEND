@@ -3,6 +3,8 @@ import { VendorCategoryService } from './vendor-category.service';
 import { CreateVendorCategoryDto } from './dto/create-vendor-category.dto';
 import { UpdateVendorCategoryDto } from './dto/update-vendor-category.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 
 @Controller('vendor-category')
 @UseGuards(JwtAuthGuard)
@@ -10,6 +12,8 @@ export class VendorCategoryController {
   constructor(private readonly vendorCategoryService: VendorCategoryService) {}
 
   @Post()
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('vendor-categories', 'add')
   async create(@Body() createDto: CreateVendorCategoryDto) {
     const data = await this.vendorCategoryService.create(createDto);
     return { statusCode: HttpStatus.CREATED, message: 'Vendor category created successfully', data };
@@ -44,12 +48,16 @@ export class VendorCategoryController {
   }
 
   @Patch(':id')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('vendor-categories', 'edit')
   async update(@Param('id') id: string, @Body() updateDto: UpdateVendorCategoryDto) {
     const data = await this.vendorCategoryService.update(id, updateDto);
     return { statusCode: HttpStatus.OK, message: 'Vendor category updated successfully', data };
   }
 
   @Delete(':id')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('vendor-categories', 'delete')
   async remove(@Param('id') id: string) {
     return this.vendorCategoryService.remove(id);
   }

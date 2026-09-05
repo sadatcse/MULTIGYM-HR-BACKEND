@@ -4,12 +4,15 @@ import { Model } from 'mongoose';
 import { AssetType, AssetTypeDocument } from './schemas/asset-type.schema';
 import { CreateAssetTypeDto } from './dto/create-asset-type.dto';
 import { UpdateAssetTypeDto } from './dto/update-asset-type.dto';
+import { BaseCrudService } from '../../common/services/base-crud.service';
 
 @Injectable()
-export class AssetTypeService {
+export class AssetTypeService extends BaseCrudService<AssetTypeDocument> {
   constructor(
     @InjectModel(AssetType.name) private readonly assetTypeModel: Model<AssetTypeDocument>,
-  ) {}
+  ) {
+    super(assetTypeModel);
+  }
 
   async create(createDto: CreateAssetTypeDto) {
     const { name, order } = createDto;
@@ -31,30 +34,15 @@ export class AssetTypeService {
   }
 
   async findAll(search?: string, status?: string, category?: string, page?: number, limit?: number) {
-    const filter: any = {};
-    if (search && search.trim()) {
-      filter.$or = [
-        { name: { $regex: search.trim(), $options: 'i' } },
-        { description: { $regex: search.trim(), $options: 'i' } },
-      ];
-    }
-    if (status && status !== 'all') {
-      filter.status = status;
-    }
-    if (category && category !== 'all') {
-      filter.category = category;
-    }
-
-    const total = await this.assetTypeModel.countDocuments(filter);
-
-    let query = this.assetTypeModel.find(filter).sort({ order: 1, createdAt: -1 });
-    if (page && limit) {
-      const skip = (page - 1) * limit;
-      query = query.skip(skip).limit(limit);
-    }
-
-    const data = await query.exec();
-    const totalPages = limit ? Math.ceil(total / limit) || 1 : 1;
+    const { data, total, page: pageOut, limit: limitOut, totalPages } = await this.findAllBase({
+      search,
+      searchFields: ['name', 'description'],
+      status,
+      page,
+      limit,
+      sort: { order: 1, createdAt: -1 },
+      extraFilter: category && category !== 'all' ? { category } : undefined,
+    });
 
     const totalAssetTypes = await this.assetTypeModel.countDocuments();
     const activeAssetTypes = await this.assetTypeModel.countDocuments({ status: 'active' });
@@ -65,19 +53,15 @@ export class AssetTypeService {
     return {
       data,
       total,
-      page: page || 1,
-      limit: limit || total,
+      page: pageOut,
+      limit: limitOut,
       totalPages,
       stats: { totalAssetTypes, activeAssetTypes, inactiveAssetTypes, maxDisplayOrder },
     };
   }
 
   async findOne(id: string) {
-    const assetType = await this.assetTypeModel.findById(id);
-    if (!assetType) {
-      throw new NotFoundException('Asset type not found');
-    }
-    return assetType;
+    return this.findOneBase(id, 'Asset type');
   }
 
   async update(id: string, updateDto: UpdateAssetTypeDto) {
@@ -110,10 +94,6 @@ export class AssetTypeService {
   }
 
   async remove(id: string) {
-    const result = await this.assetTypeModel.findByIdAndDelete(id);
-    if (!result) {
-      throw new NotFoundException('Asset type not found');
-    }
-    return { message: 'Asset type deleted successfully' };
+    return this.removeBase(id, 'Asset type');
   }
 }

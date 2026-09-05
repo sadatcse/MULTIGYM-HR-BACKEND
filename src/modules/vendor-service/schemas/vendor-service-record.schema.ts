@@ -1,6 +1,8 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Schema as MongooseSchema, Types } from 'mongoose';
 
+import { PurchasePaymentSchema } from '../../vendor-purchase/schemas/vendor-purchase.schema';
+
 export type VendorServiceRecordDocument = HydratedDocument<VendorServiceRecord>;
 
 @Schema({ timestamps: true })
@@ -32,6 +34,9 @@ export class VendorServiceRecord {
   @Prop()
   nextServiceDate?: Date;
 
+  @Prop()
+  dueDate?: Date;
+
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'VendorContract' })
   maintenanceContract?: Types.ObjectId;
 
@@ -43,6 +48,18 @@ export class VendorServiceRecord {
 
   @Prop({ trim: true })
   department?: string;
+
+  @Prop({ type: [PurchasePaymentSchema], default: [] })
+  payments: any[];
+
+  @Prop({ min: 0, default: 0 })
+  amountPaid: number;
+
+  @Prop({ min: 0, default: 0 })
+  amountDue: number;
+
+  @Prop({ enum: ['paid', 'partial', 'pending', 'overdue'], default: 'pending' })
+  paymentStatus: string;
 }
 
 export const VendorServiceRecordSchema = SchemaFactory.createForClass(VendorServiceRecord);

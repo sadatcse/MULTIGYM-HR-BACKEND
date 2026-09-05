@@ -7,6 +7,8 @@ import { Asset, AssetSchema } from '../asset/schemas/asset.schema';
 import { AssetType, AssetTypeSchema } from '../asset-type/schemas/asset-type.schema';
 import { Employee, EmployeeSchema } from '../user/schemas/employee.schema';
 
+import { AssetTransactionModule } from '../asset-transaction/asset-transaction.module';
+
 @Module({
   imports: [
     MongooseModule.forFeature([
@@ -15,6 +17,7 @@ import { Employee, EmployeeSchema } from '../user/schemas/employee.schema';
       { name: AssetType.name, schema: AssetTypeSchema },
       { name: Employee.name, schema: EmployeeSchema },
     ]),
+    AssetTransactionModule,
   ],
   controllers: [AssetAssignmentController],
   providers: [AssetAssignmentService],

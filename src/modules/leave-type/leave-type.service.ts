@@ -4,13 +4,16 @@ import { Model } from 'mongoose';
 import { LeaveType, LeaveTypeDocument } from './schemas/leave-type.schema';
 import { CreateLeaveTypeDto } from './dto/create-leave-type.dto';
 import { UpdateLeaveTypeDto } from './dto/update-leave-type.dto';
+import { BaseCrudService } from '../../common/services/base-crud.service';
 
 @Injectable()
-export class LeaveTypeService {
+export class LeaveTypeService extends BaseCrudService<LeaveTypeDocument> {
   constructor(
     @InjectModel(LeaveType.name)
     private readonly leaveTypeModel: Model<LeaveTypeDocument>,
-  ) {}
+  ) {
+    super(leaveTypeModel);
+  }
 
   async create(createDto: CreateLeaveTypeDto) {
     const { name, order } = createDto;
@@ -32,26 +35,14 @@ export class LeaveTypeService {
   }
 
   async findAll(search?: string, status?: string, page?: number, limit?: number) {
-    const filter: any = {};
-    if (search && search.trim()) {
-      filter.$or = [
-        { name: { $regex: search.trim(), $options: 'i' } },
-        { description: { $regex: search.trim(), $options: 'i' } },
-      ];
-    }
-    if (status && status !== 'all') {
-      filter.status = status;
-    }
-
-    const total = await this.leaveTypeModel.countDocuments(filter);
-    let query = this.leaveTypeModel.find(filter).sort({ order: 1, createdAt: -1 });
-
-    if (page && limit) {
-      query = query.skip((page - 1) * limit).limit(limit);
-    }
-
-    const data = await query.exec();
-    const totalPages = limit ? Math.ceil(total / limit) || 1 : 1;
+    const { data, total, page: pageOut, limit: limitOut, totalPages } = await this.findAllBase({
+      search,
+      searchFields: ['name', 'description'],
+      status,
+      page,
+      limit,
+      sort: { order: 1, createdAt: -1 },
+    });
 
     const totalLeaveTypes = await this.leaveTypeModel.countDocuments();
     const activeCount = await this.leaveTypeModel.countDocuments({ status: 'active' });
@@ -60,8 +51,8 @@ export class LeaveTypeService {
     return {
       data,
       total,
-      page: page || 1,
-      limit: limit || total,
+      page: pageOut,
+      limit: limitOut,
       totalPages,
       stats: {
         totalLeaveTypes,
@@ -72,9 +63,7 @@ export class LeaveTypeService {
   }
 
   async findOne(id: string) {
-    const doc = await this.leaveTypeModel.findById(id);
-    if (!doc) throw new NotFoundException(`Leave type not found`);
-    return doc;
+    return this.findOneBase(id, 'Leave type');
   }
 
   async update(id: string, updateDto: UpdateLeaveTypeDto) {
@@ -95,8 +84,6 @@ export class LeaveTypeService {
   }
 
   async remove(id: string) {
-    const deleted = await this.leaveTypeModel.findByIdAndDelete(id);
-    if (!deleted) throw new NotFoundException(`Leave type not found`);
-    return { message: 'Leave type deleted successfully' };
+    return this.removeBase(id, 'Leave type');
   }
 }

@@ -4,13 +4,16 @@ import { Model } from 'mongoose';
 import { LatePolicy, LatePolicyDocument } from './schemas/late-policy.schema';
 import { CreateLatePolicyDto } from './dto/create-late-policy.dto';
 import { UpdateLatePolicyDto } from './dto/update-late-policy.dto';
+import { BaseCrudService } from '../../common/services/base-crud.service';
 
 @Injectable()
-export class LatePolicyService {
+export class LatePolicyService extends BaseCrudService<LatePolicyDocument> {
   constructor(
     @InjectModel(LatePolicy.name)
     private readonly latePolicyModel: Model<LatePolicyDocument>,
-  ) {}
+  ) {
+    super(latePolicyModel);
+  }
 
   async create(createDto: CreateLatePolicyDto) {
     const { policyName } = createDto;
@@ -27,23 +30,14 @@ export class LatePolicyService {
   }
 
   async findAll(search?: string, status?: string, page?: number, limit?: number) {
-    const filter: any = {};
-    if (search && search.trim()) {
-      filter.policyName = { $regex: search.trim(), $options: 'i' };
-    }
-    if (status && status !== 'all') {
-      filter.status = status;
-    }
-
-    const total = await this.latePolicyModel.countDocuments(filter);
-    let query = this.latePolicyModel.find(filter).sort({ createdAt: -1 });
-
-    if (page && limit) {
-      query = query.skip((page - 1) * limit).limit(limit);
-    }
-
-    const data = await query.exec();
-    const totalPages = limit ? Math.ceil(total / limit) || 1 : 1;
+    const { data, total, page: pageOut, limit: limitOut, totalPages } = await this.findAllBase({
+      search,
+      searchFields: ['policyName'],
+      status,
+      page,
+      limit,
+      sort: { createdAt: -1 },
+    });
 
     const totalPolicies = await this.latePolicyModel.countDocuments();
     const activeCount = await this.latePolicyModel.countDocuments({ status: 'active' });
@@ -51,8 +45,8 @@ export class LatePolicyService {
     return {
       data,
       total,
-      page: page || 1,
-      limit: limit || total,
+      page: pageOut,
+      limit: limitOut,
       totalPages,
       stats: {
         totalPolicies,
@@ -62,9 +56,7 @@ export class LatePolicyService {
   }
 
   async findOne(id: string) {
-    const doc = await this.latePolicyModel.findById(id);
-    if (!doc) throw new NotFoundException(`Late policy not found`);
-    return doc;
+    return this.findOneBase(id, 'Late policy');
   }
 
   async update(id: string, updateDto: UpdateLatePolicyDto) {
@@ -85,8 +77,6 @@ export class LatePolicyService {
   }
 
   async remove(id: string) {
-    const deleted = await this.latePolicyModel.findByIdAndDelete(id);
-    if (!deleted) throw new NotFoundException(`Late policy not found`);
-    return { message: 'Late policy deleted successfully' };
+    return this.removeBase(id, 'Late policy');
   }
 }

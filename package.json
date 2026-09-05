@@ -15,7 +15,8 @@
     "seed:vendors": "ts-node -r tsconfig-paths/register seed-vendors.ts",
     "seed:product-categories": "ts-node -r tsconfig-paths/register seed-product-categories.ts",
     "seed:assets": "ts-node -r tsconfig-paths/register seed-assets.ts",
-    "seed:vendor-purchases-services": "ts-node -r tsconfig-paths/register seed-vendor-purchases-services.ts"
+    "seed:vendor-purchases-services": "ts-node -r tsconfig-paths/register seed-vendor-purchases-services.ts",
+    "seed:task-categories": "ts-node -r tsconfig-paths/register seed-task-categories.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.204.0",

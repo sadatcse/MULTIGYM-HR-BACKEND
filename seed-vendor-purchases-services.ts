@@ -29,11 +29,6 @@ async function seedPurchasesAndServices() {
       process.exit(1);
     }
 
-    const vendorMap: Record<string, any> = {};
-    vendors.forEach((v) => {
-      vendorMap[v.name] = v._id;
-    });
-
     const getVendorId = (nameSub: string) => {
       const match = vendors.find((v) => v.name.toLowerCase().includes(nameSub.toLowerCase()));
       return match ? match._id : vendors[0]._id;
@@ -55,7 +50,7 @@ async function seedPurchasesAndServices() {
         paymentStatus: 'paid',
         purchaseDate: new Date('2026-01-15'),
         paymentDate: new Date('2026-01-20'),
-        branch: 'Multi Gym Premium',
+        branch: 'Shiya Masjid Branch',
         department: 'Fitness & Training',
         warranty: {
           available: true,
@@ -79,7 +74,7 @@ async function seedPurchasesAndServices() {
         paymentStatus: 'paid',
         purchaseDate: new Date('2026-02-10'),
         paymentDate: new Date('2026-02-15'),
-        branch: 'Multi Gym Main',
+        branch: 'Lalmatia Branch',
         department: 'Fitness & Training',
         warranty: {
           available: true,
@@ -103,12 +98,12 @@ async function seedPurchasesAndServices() {
         paymentStatus: 'paid',
         purchaseDate: new Date('2025-09-01'),
         paymentDate: new Date('2025-09-05'),
-        branch: 'Multi Gym Premium',
-        department: 'Operations',
+        branch: 'Power Fit — Adabor',
+        department: 'Management',
         warranty: {
           available: true,
           startDate: new Date('2025-09-01'),
-          endDate: new Date('2026-09-01'), // Expiring soon!
+          endDate: new Date('2026-09-01'),
           durationMonths: 12,
           serialNumber: 'GEN-PERK-200KVA-881',
           assetId: 'AST-OPS-002',
@@ -127,8 +122,8 @@ async function seedPurchasesAndServices() {
         paymentStatus: 'paid',
         purchaseDate: new Date('2026-01-01'),
         paymentDate: new Date('2026-01-05'),
-        branch: 'Multi Gym Premium',
-        department: 'IT & Security',
+        branch: 'Shiya Masjid Branch',
+        department: 'Management',
         warranty: {
           available: true,
           startDate: new Date('2026-01-01'),
@@ -150,8 +145,8 @@ async function seedPurchasesAndServices() {
         totalPrice: 340000,
         paymentStatus: 'partial',
         purchaseDate: new Date('2026-07-10'),
-        branch: 'Multi Gym Premium',
-        department: 'Front Desk Operations',
+        branch: 'MULTIGYM',
+        department: 'Front Desk',
         warranty: { available: false },
       },
       {
@@ -167,12 +162,12 @@ async function seedPurchasesAndServices() {
         paymentStatus: 'paid',
         purchaseDate: new Date('2025-11-15'),
         paymentDate: new Date('2025-11-20'),
-        branch: 'Multi Gym Main',
-        department: 'Operations',
+        branch: 'Power Fit — Adabor',
+        department: 'Housekeeping',
         warranty: {
           available: true,
           startDate: new Date('2025-11-15'),
-          endDate: new Date('2026-11-15'), // Expiring in 2.5 months
+          endDate: new Date('2026-11-15'),
           durationMonths: 12,
           serialNumber: 'NS-STEAM-12KW-441',
           assetId: 'AST-SPA-001',
@@ -191,8 +186,8 @@ async function seedPurchasesAndServices() {
         paymentStatus: 'paid',
         purchaseDate: new Date('2026-03-01'),
         paymentDate: new Date('2026-03-05'),
-        branch: 'Multi Gym Premium',
-        department: 'IT & Security',
+        branch: 'Lalmatia Branch',
+        department: 'Management',
         warranty: {
           available: true,
           startDate: new Date('2026-03-01'),
@@ -214,8 +209,8 @@ async function seedPurchasesAndServices() {
         totalPrice: 1050000,
         paymentStatus: 'pending',
         purchaseDate: new Date('2026-06-20'),
-        branch: 'Multi Gym Premium',
-        department: 'Operations',
+        branch: 'Shiya Masjid Branch',
+        department: 'Housekeeping',
         warranty: {
           available: true,
           startDate: new Date('2026-06-20'),
@@ -238,8 +233,8 @@ async function seedPurchasesAndServices() {
         paymentStatus: 'paid',
         purchaseDate: new Date('2026-04-12'),
         paymentDate: new Date('2026-04-15'),
-        branch: 'Multi Gym Main',
-        department: 'Operations',
+        branch: 'MULTIGYM',
+        department: 'Fitness & Training',
         warranty: {
           available: true,
           startDate: new Date('2026-04-12'),
@@ -262,8 +257,8 @@ async function seedPurchasesAndServices() {
         paymentStatus: 'paid',
         purchaseDate: new Date('2026-05-01'),
         paymentDate: new Date('2026-05-05'),
-        branch: 'Multi Gym Premium',
-        department: 'Human Resources',
+        branch: 'Shiya Masjid Branch',
+        department: 'HR',
         warranty: { available: false },
       },
       {
@@ -279,21 +274,15 @@ async function seedPurchasesAndServices() {
         paymentStatus: 'paid',
         purchaseDate: new Date('2026-06-01'),
         paymentDate: new Date('2026-06-03'),
-        branch: 'Multi Gym Main',
-        department: 'Operations',
+        branch: 'Lalmatia Branch',
+        department: 'Housekeeping',
         warranty: { available: false },
       },
     ];
 
     for (const pur of fakePurchases) {
-      const exists = await PurchaseModel.findOne({ invoiceNumber: pur.invoiceNumber });
-      if (!exists) {
-        await PurchaseModel.create(pur);
-        console.log(`Created purchase record: ${pur.productName} (${pur.invoiceNumber})`);
-      } else {
-        await PurchaseModel.updateOne({ invoiceNumber: pur.invoiceNumber }, { $set: pur });
-        console.log(`Updated purchase record: ${pur.productName} (${pur.invoiceNumber})`);
-      }
+      await PurchaseModel.findOneAndUpdate({ invoiceNumber: pur.invoiceNumber }, { $set: pur }, { upsert: true, new: true });
+      console.log(`Upserted purchase record: ${pur.productName} (${pur.invoiceNumber})`);
     }
 
     console.log('Seeding Vendor Maintenance Services & Warranty Records...');
@@ -309,7 +298,7 @@ async function seedPurchasesAndServices() {
         serviceRequestRef: 'SR-TG-2026-01',
         completionStatus: 'completed',
         serviceCost: 25000,
-        branch: 'Multi Gym Premium',
+        branch: 'Shiya Masjid Branch',
         department: 'Fitness & Training',
         remarks: 'All 4 treadmills passed load tests cleanly.',
       },
@@ -323,7 +312,7 @@ async function seedPurchasesAndServices() {
         serviceRequestRef: 'SR-TG-2026-04',
         completionStatus: 'completed',
         serviceCost: 15000,
-        branch: 'Multi Gym Main',
+        branch: 'Lalmatia Branch',
         department: 'Fitness & Training',
         remarks: 'Replaced sensor under warranty terms.',
       },
@@ -337,8 +326,8 @@ async function seedPurchasesAndServices() {
         serviceRequestRef: 'SR-ENG-2026-12',
         completionStatus: 'completed',
         serviceCost: 45000,
-        branch: 'Multi Gym Premium',
-        department: 'Operations',
+        branch: 'Power Fit — Adabor',
+        department: 'Management',
         remarks: 'Generator battery voltage optimal at 27.2V.',
       },
       {
@@ -351,8 +340,8 @@ async function seedPurchasesAndServices() {
         serviceRequestRef: 'SR-L3-2026-88',
         completionStatus: 'completed',
         serviceCost: 12000,
-        branch: 'Multi Gym Premium',
-        department: 'IT & Security',
+        branch: 'Shiya Masjid Branch',
+        department: 'Management',
         remarks: 'Latency steady under 5ms.',
       },
       {
@@ -365,8 +354,8 @@ async function seedPurchasesAndServices() {
         serviceRequestRef: 'SR-NS-2026-09',
         completionStatus: 'completed',
         serviceCost: 18500,
-        branch: 'Multi Gym Main',
-        department: 'Operations',
+        branch: 'Power Fit — Adabor',
+        department: 'Housekeeping',
         remarks: 'Sauna temperature holds steadily at 80°C.',
       },
       {
@@ -379,8 +368,8 @@ async function seedPurchasesAndServices() {
         serviceRequestRef: 'SR-CS-2026-33',
         completionStatus: 'in-progress',
         serviceCost: 32000,
-        branch: 'Multi Gym Premium',
-        department: 'Operations',
+        branch: 'Shiya Masjid Branch',
+        department: 'Housekeeping',
         remarks: 'Unit 3 and 4 gas pressures adjusted.',
       },
       {
@@ -393,8 +382,8 @@ async function seedPurchasesAndServices() {
         serviceRequestRef: 'SR-SC-2026-14',
         completionStatus: 'scheduled',
         serviceCost: 8000,
-        branch: 'Multi Gym Main',
-        department: 'Operations',
+        branch: 'MULTIGYM',
+        department: 'Fitness & Training',
         remarks: 'Scheduled for upcoming Tuesday morning.',
       },
       {
@@ -407,21 +396,15 @@ async function seedPurchasesAndServices() {
         serviceRequestRef: 'SR-CCTV-2026-07',
         completionStatus: 'scheduled',
         serviceCost: 15000,
-        branch: 'Multi Gym Premium',
-        department: 'IT & Security',
+        branch: 'Lalmatia Branch',
+        department: 'Management',
         remarks: 'Routine quarterly surveillance check.',
       },
     ];
 
     for (const ser of fakeServices) {
-      const exists = await ServiceModel.findOne({ serviceRequestRef: ser.serviceRequestRef });
-      if (!exists) {
-        await ServiceModel.create(ser);
-        console.log(`Created service record: ${ser.serviceType} (${ser.serviceRequestRef})`);
-      } else {
-        await ServiceModel.updateOne({ serviceRequestRef: ser.serviceRequestRef }, { $set: ser });
-        console.log(`Updated service record: ${ser.serviceType} (${ser.serviceRequestRef})`);
-      }
+      await ServiceModel.findOneAndUpdate({ serviceRequestRef: ser.serviceRequestRef }, { $set: ser }, { upsert: true, new: true });
+      console.log(`Upserted service record: ${ser.serviceType} (${ser.serviceRequestRef})`);
     }
 
     console.log('Vendor Purchases & Services database seeding completed successfully!');

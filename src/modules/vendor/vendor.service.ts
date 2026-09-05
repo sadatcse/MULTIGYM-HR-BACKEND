@@ -134,8 +134,11 @@ export class VendorService {
     ]);
 
     const purchases = purchasesResult.data;
-    const totalSpend = purchases.reduce((sum: number, p: any) => sum + (p.totalPrice || 0), 0);
-    const activeWarrantyCount = purchases.filter((p: any) => p.warrantyStatus === 'active').length;
+    const totalSpend = purchases.reduce((sum: number, p: any) => sum + (p.totalAmount || 0), 0);
+    const activeWarrantyCount = purchases.reduce(
+      (count: number, p: any) => count + (p.items || []).filter((i: any) => i.warrantyStatus === 'active').length,
+      0,
+    );
     const upcomingServiceCount = servicesResult.data.filter(
       (s: any) => s.nextServiceDate && new Date(s.nextServiceDate) >= new Date(),
     ).length;

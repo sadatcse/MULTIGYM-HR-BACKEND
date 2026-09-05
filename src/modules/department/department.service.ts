@@ -4,13 +4,16 @@ import { Model } from 'mongoose';
 import { Department, DepartmentDocument } from './schemas/department.schema';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
+import { BaseCrudService } from '../../common/services/base-crud.service';
 
 @Injectable()
-export class DepartmentService {
+export class DepartmentService extends BaseCrudService<DepartmentDocument> {
   constructor(
     @InjectModel(Department.name)
     private readonly departmentModel: Model<DepartmentDocument>,
-  ) {}
+  ) {
+    super(departmentModel);
+  }
 
   async create(createDto: CreateDepartmentDto) {
     const { name, order } = createDto;
@@ -34,25 +37,14 @@ export class DepartmentService {
   }
 
   async findAll(search?: string, status?: string, page?: number, limit?: number) {
-    const filter: any = {};
-    if (search && search.trim()) {
-      filter.name = { $regex: search.trim(), $options: 'i' };
-    }
-    if (status && status !== 'all') {
-      filter.status = status;
-    }
-
-    const total = await this.departmentModel.countDocuments(filter);
-
-    let query = this.departmentModel.find(filter).sort({ order: 1, createdAt: -1 });
-
-    if (page && limit) {
-      const skip = (page - 1) * limit;
-      query = query.skip(skip).limit(limit);
-    }
-
-    const data = await query.exec();
-    const totalPages = limit ? Math.ceil(total / limit) || 1 : 1;
+    const { data, total, page: pageOut, limit: limitOut, totalPages } = await this.findAllBase({
+      search,
+      searchFields: ['name'],
+      status,
+      page,
+      limit,
+      sort: { order: 1, createdAt: -1 },
+    });
 
     // Aggregate system-wide KPI statistics from backend
     const totalDepartments = await this.departmentModel.countDocuments();
@@ -64,8 +56,8 @@ export class DepartmentService {
     return {
       data,
       total,
-      page: page || 1,
-      limit: limit || total,
+      page: pageOut,
+      limit: limitOut,
       totalPages,
       stats: {
         totalDepartments,
@@ -77,11 +69,7 @@ export class DepartmentService {
   }
 
   async findOne(id: string) {
-    const department = await this.departmentModel.findById(id);
-    if (!department) {
-      throw new NotFoundException(`Department not found`);
-    }
-    return department;
+    return this.findOneBase(id, 'Department');
   }
 
   async update(id: string, updateDto: UpdateDepartmentDto) {
@@ -114,10 +102,6 @@ export class DepartmentService {
   }
 
   async remove(id: string) {
-    const result = await this.departmentModel.findByIdAndDelete(id);
-    if (!result) {
-      throw new NotFoundException(`Department not found`);
-    }
-    return { message: 'Department deleted successfully' };
+    return this.removeBase(id, 'Department');
   }
 }

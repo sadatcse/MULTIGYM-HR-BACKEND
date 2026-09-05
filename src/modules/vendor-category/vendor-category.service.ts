@@ -4,13 +4,16 @@ import { Model } from 'mongoose';
 import { VendorCategory, VendorCategoryDocument } from './schemas/vendor-category.schema';
 import { CreateVendorCategoryDto } from './dto/create-vendor-category.dto';
 import { UpdateVendorCategoryDto } from './dto/update-vendor-category.dto';
+import { BaseCrudService } from '../../common/services/base-crud.service';
 
 @Injectable()
-export class VendorCategoryService {
+export class VendorCategoryService extends BaseCrudService<VendorCategoryDocument> {
   constructor(
     @InjectModel(VendorCategory.name)
     private readonly vendorCategoryModel: Model<VendorCategoryDocument>,
-  ) {}
+  ) {
+    super(vendorCategoryModel);
+  }
 
   async create(createDto: CreateVendorCategoryDto) {
     const { title, order } = createDto;
@@ -32,27 +35,14 @@ export class VendorCategoryService {
   }
 
   async findAll(search?: string, status?: string, page?: number, limit?: number) {
-    const filter: any = {};
-    if (search && search.trim()) {
-      filter.$or = [
-        { title: { $regex: search.trim(), $options: 'i' } },
-        { description: { $regex: search.trim(), $options: 'i' } },
-      ];
-    }
-    if (status && status !== 'all') {
-      filter.status = status;
-    }
-
-    const total = await this.vendorCategoryModel.countDocuments(filter);
-
-    let query = this.vendorCategoryModel.find(filter).sort({ order: 1, createdAt: -1 });
-    if (page && limit) {
-      const skip = (page - 1) * limit;
-      query = query.skip(skip).limit(limit);
-    }
-
-    const data = await query.exec();
-    const totalPages = limit ? Math.ceil(total / limit) || 1 : 1;
+    const { data, total, page: pageOut, limit: limitOut, totalPages } = await this.findAllBase({
+      search,
+      searchFields: ['title', 'description'],
+      status,
+      page,
+      limit,
+      sort: { order: 1, createdAt: -1 },
+    });
 
     const totalCategories = await this.vendorCategoryModel.countDocuments();
     const activeCategories = await this.vendorCategoryModel.countDocuments({ status: 'active' });
@@ -63,19 +53,15 @@ export class VendorCategoryService {
     return {
       data,
       total,
-      page: page || 1,
-      limit: limit || total,
+      page: pageOut,
+      limit: limitOut,
       totalPages,
       stats: { totalCategories, activeCategories, inactiveCategories, maxDisplayOrder },
     };
   }
 
   async findOne(id: string) {
-    const category = await this.vendorCategoryModel.findById(id);
-    if (!category) {
-      throw new NotFoundException('Vendor category not found');
-    }
-    return category;
+    return this.findOneBase(id, 'Vendor category');
   }
 
   async update(id: string, updateDto: UpdateVendorCategoryDto) {
@@ -108,10 +94,6 @@ export class VendorCategoryService {
   }
 
   async remove(id: string) {
-    const result = await this.vendorCategoryModel.findByIdAndDelete(id);
-    if (!result) {
-      throw new NotFoundException('Vendor category not found');
-    }
-    return { message: 'Vendor category deleted successfully' };
+    return this.removeBase(id, 'Vendor category');
   }
 }

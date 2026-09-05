@@ -9,14 +9,39 @@ export type AssetAssignmentDocument = HydratedDocument<AssetAssignment>;
 // and per employee.
 @Schema({ timestamps: true })
 export class AssetAssignment {
-  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Employee', required: true, index: true })
-  employee: Types.ObjectId;
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Employee', required: false, index: true })
+  employee?: Types.ObjectId;
+
+  // Immutable historical employee snapshot fields (Survives employee deletion)
+  @Prop({ required: [true, 'Employee name snapshot is required'], trim: true, index: true })
+  employeeName: string;
+
+  @Prop({ trim: true, index: true })
+  employeeCode?: string;
+
+  @Prop({ trim: true })
+  departmentName?: string;
+
+  @Prop({ trim: true })
+  designationName?: string;
+
+  @Prop({ trim: true })
+  branchName?: string;
 
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Asset', required: true, index: true })
   asset: Types.ObjectId;
 
+  @Prop({ trim: true })
+  size?: string;
+
   @Prop({ default: 1, min: 1 })
   quantity: number;
+
+  @Prop({ default: 0, min: 0 })
+  quantityReturned: number;
+
+  @Prop({ default: 1, min: 0 })
+  quantityPending: number;
 
   @Prop({ required: [true, 'Issue date is required'] })
   issueDate: Date;
@@ -30,7 +55,7 @@ export class AssetAssignment {
   @Prop({ trim: true })
   issueNotes?: string;
 
-  @Prop({ enum: ['active', 'returned'], default: 'active' })
+  @Prop({ enum: ['active', 'returned', 'partially_returned', 'transferred', 'damaged', 'lost', 'repair'], default: 'active' })
   status: string;
 
   @Prop()
@@ -45,7 +70,7 @@ export class AssetAssignment {
   @Prop({ trim: true })
   returnNotes?: string;
 
-  @Prop({ enum: ['none', 'damaged', 'lost'], default: 'none' })
+  @Prop({ enum: ['none', 'damaged', 'lost', 'repair'], default: 'none' })
   damageOrLoss: string;
 }
 

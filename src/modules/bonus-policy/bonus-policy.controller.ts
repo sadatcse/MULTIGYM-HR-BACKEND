@@ -13,6 +13,8 @@ import { BonusPolicyService } from './bonus-policy.service';
 import { CreateBonusPolicyDto } from './dto/create-bonus-policy.dto';
 import { UpdateBonusPolicyDto } from './dto/update-bonus-policy.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 
 @Controller('bonus-policy')
 @UseGuards(JwtAuthGuard)
@@ -20,6 +22,8 @@ export class BonusPolicyController {
   constructor(private readonly bonusPolicyService: BonusPolicyService) {}
 
   @Post()
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('bonus-policy', 'add')
   create(@Body() createDto: CreateBonusPolicyDto) {
     return this.bonusPolicyService.create(createDto);
   }
@@ -45,11 +49,15 @@ export class BonusPolicyController {
   }
 
   @Patch(':id')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('bonus-policy', 'edit')
   update(@Param('id') id: string, @Body() updateDto: UpdateBonusPolicyDto) {
     return this.bonusPolicyService.update(id, updateDto);
   }
 
   @Delete(':id')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('bonus-policy', 'delete')
   remove(@Param('id') id: string) {
     return this.bonusPolicyService.remove(id);
   }

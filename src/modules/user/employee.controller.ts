@@ -22,6 +22,8 @@ import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { LoginEmployeeDto } from './dto/login-employee.dto';
 import { ChangePasswordEmployeeDto } from './dto/change-password-employee.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 
 @Controller('employee')
 export class EmployeeController {
@@ -100,19 +102,22 @@ export class EmployeeController {
   }
 
   @Post('post')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('employee', 'add')
   create(@Body() dto: CreateEmployeeDto) {
     return this.employeeService.create(dto);
   }
 
   @Delete('delete/:id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('employee', 'delete')
   remove(@Param('id') id: string) {
     return this.employeeService.remove(id);
   }
 
   @Put('update/:id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('employee', 'edit')
   update(@Param('id') id: string, @Body() dto: UpdateEmployeeDto) {
     return this.employeeService.update(id, dto);
   }

@@ -4,13 +4,16 @@ import { Model } from 'mongoose';
 import { BonusPolicy, BonusPolicyDocument } from './schemas/bonus-policy.schema';
 import { CreateBonusPolicyDto } from './dto/create-bonus-policy.dto';
 import { UpdateBonusPolicyDto } from './dto/update-bonus-policy.dto';
+import { BaseCrudService } from '../../common/services/base-crud.service';
 
 @Injectable()
-export class BonusPolicyService {
+export class BonusPolicyService extends BaseCrudService<BonusPolicyDocument> {
   constructor(
     @InjectModel(BonusPolicy.name)
     private readonly bonusPolicyModel: Model<BonusPolicyDocument>,
-  ) {}
+  ) {
+    super(bonusPolicyModel);
+  }
 
   async create(createDto: CreateBonusPolicyDto) {
     const { policyName } = createDto;
@@ -27,23 +30,14 @@ export class BonusPolicyService {
   }
 
   async findAll(search?: string, status?: string, page?: number, limit?: number) {
-    const filter: any = {};
-    if (search && search.trim()) {
-      filter.policyName = { $regex: search.trim(), $options: 'i' };
-    }
-    if (status && status !== 'all') {
-      filter.status = status;
-    }
-
-    const total = await this.bonusPolicyModel.countDocuments(filter);
-    let query = this.bonusPolicyModel.find(filter).sort({ createdAt: -1 });
-
-    if (page && limit) {
-      query = query.skip((page - 1) * limit).limit(limit);
-    }
-
-    const data = await query.exec();
-    const totalPages = limit ? Math.ceil(total / limit) || 1 : 1;
+    const { data, total, page: pageOut, limit: limitOut, totalPages } = await this.findAllBase({
+      search,
+      searchFields: ['policyName'],
+      status,
+      page,
+      limit,
+      sort: { createdAt: -1 },
+    });
 
     const totalPolicies = await this.bonusPolicyModel.countDocuments();
     const activeCount = await this.bonusPolicyModel.countDocuments({ status: 'active' });
@@ -51,8 +45,8 @@ export class BonusPolicyService {
     return {
       data,
       total,
-      page: page || 1,
-      limit: limit || total,
+      page: pageOut,
+      limit: limitOut,
       totalPages,
       stats: {
         totalPolicies,
@@ -62,9 +56,7 @@ export class BonusPolicyService {
   }
 
   async findOne(id: string) {
-    const doc = await this.bonusPolicyModel.findById(id);
-    if (!doc) throw new NotFoundException(`Bonus policy not found`);
-    return doc;
+    return this.findOneBase(id, 'Bonus policy');
   }
 
   async update(id: string, updateDto: UpdateBonusPolicyDto) {
@@ -85,8 +77,6 @@ export class BonusPolicyService {
   }
 
   async remove(id: string) {
-    const deleted = await this.bonusPolicyModel.findByIdAndDelete(id);
-    if (!deleted) throw new NotFoundException(`Bonus policy not found`);
-    return { message: 'Bonus policy deleted successfully' };
+    return this.removeBase(id, 'Bonus policy');
   }
 }

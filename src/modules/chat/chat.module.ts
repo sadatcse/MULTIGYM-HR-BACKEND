@@ -10,5 +10,6 @@ import { PresenceService } from './presence.service';
   imports: [MongooseModule.forFeature([{ name: ChatMessage.name, schema: ChatMessageSchema }])],
   controllers: [ChatController],
   providers: [ChatService, ChatGateway, PresenceService],
+  exports: [ChatGateway, ChatService],
 })
 export class ChatModule {}

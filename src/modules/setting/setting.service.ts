@@ -31,7 +31,11 @@ export class SettingService {
         language: 'English',
         enablePrintHeader: 'yes',
         enablePrintFooter: 'yes',
-        printHeaderInch: 1.0,
+        // 1.6in matches the actual rendered height of the universal print
+        // header (company info + report title/filter rows) — 1.0in let the
+        // header overlap the first table row once it became fixed-positioned
+        // so it can repeat on every printed page (see exportHelper.js).
+        printHeaderInch: 1.6,
         printFooterInch: 0.75,
         printHeaderText: 'MULTIGYM HR MANAGEMENT SYSTEM',
         printFooterText: 'This is a computer-generated document. No signature required.',

@@ -13,6 +13,8 @@ import { ProxyDutyService } from './proxy-duty.service';
 import { CreateProxyDutyDto } from './dto/create-proxy-duty.dto';
 import { UpdateProxyDutyDto } from './dto/update-proxy-duty.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 
 @Controller('proxy-duty')
 @UseGuards(JwtAuthGuard)
@@ -20,6 +22,8 @@ export class ProxyDutyController {
   constructor(private readonly proxyDutyService: ProxyDutyService) {}
 
   @Post()
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('proxy-duty', 'add')
   create(@Body() createDto: CreateProxyDutyDto) {
     return this.proxyDutyService.create(createDto);
   }
@@ -47,11 +51,15 @@ export class ProxyDutyController {
   }
 
   @Patch(':id')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('proxy-duty', 'edit')
   update(@Param('id') id: string, @Body() updateDto: UpdateProxyDutyDto) {
     return this.proxyDutyService.update(id, updateDto);
   }
 
   @Delete(':id')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('proxy-duty', 'delete')
   remove(@Param('id') id: string) {
     return this.proxyDutyService.remove(id);
   }

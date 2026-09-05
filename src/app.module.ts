@@ -28,6 +28,7 @@ import { UploadModule } from './modules/upload/upload.module';
 import { AssetTypeModule } from './modules/asset-type/asset-type.module';
 import { AssetModule } from './modules/asset/asset.module';
 import { AssetAssignmentModule } from './modules/asset-assignment/asset-assignment.module';
+import { AssetTransactionModule } from './modules/asset-transaction/asset-transaction.module';
 
 // 7 New HR Enterprise Modules
 import { LeaveTypeModule } from './modules/leave-type/leave-type.module';
@@ -37,6 +38,10 @@ import { AdvancePolicyModule } from './modules/advance-policy/advance-policy.mod
 import { ProxyDutyModule } from './modules/proxy-duty/proxy-duty.module';
 import { OvertimeModule } from './modules/overtime/overtime.module';
 import { BonusPolicyModule } from './modules/bonus-policy/bonus-policy.module';
+import { NoticeModule } from './modules/notice/notice.module';
+import { TaskModule } from './modules/task/task.module';
+import { AccountabilityModule } from './modules/accountability/accountability.module';
+import { ManagementPersonModule } from './modules/management-person/management-person.module';
 
 @Module({
   imports: [
@@ -76,6 +81,7 @@ import { BonusPolicyModule } from './modules/bonus-policy/bonus-policy.module';
     AssetTypeModule,
     AssetModule,
     AssetAssignmentModule,
+    AssetTransactionModule,
     LeaveTypeModule,
     WorkScheduleModule,
     LatePolicyModule,
@@ -83,6 +89,10 @@ import { BonusPolicyModule } from './modules/bonus-policy/bonus-policy.module';
     ProxyDutyModule,
     OvertimeModule,
     BonusPolicyModule,
+    NoticeModule,
+    TaskModule,
+    AccountabilityModule,
+    ManagementPersonModule,
   ],
   controllers: [AppController],
   providers: [TransactionLoggerMiddleware],

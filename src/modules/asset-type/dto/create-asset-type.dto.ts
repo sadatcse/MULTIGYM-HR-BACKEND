@@ -5,7 +5,8 @@ export class CreateAssetTypeDto {
   @IsString()
   name: string;
 
-  @IsEnum(['Uniform & Identification', 'Keys', 'Company Assets'])
+  @IsNotEmpty({ message: 'Category is required' })
+  @IsString()
   category: string;
 
   @IsOptional()
@@ -33,4 +34,36 @@ export class CreateAssetTypeDto {
   @IsNumber()
   @Min(1)
   replacementIntervalMonths?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  requiresSerialNumber?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  requiresSize?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  requiresCondition?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  requiresEmployeeAssignment?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  requiresBranch?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  requiresDepartment?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  quantityBased?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  individualBased?: boolean;
 }

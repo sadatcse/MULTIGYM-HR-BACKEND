@@ -24,7 +24,10 @@ async function bootstrap() {
   app.use(
     rateLimit({
       windowMs: 5 * 60 * 1000, // 5 minutes
-      max: 1000, // Limit each IP to 1000 requests
+      max: 5000, // Limit each IP to 5000 requests — a single dashboard page
+      // easily fires dozens of requests per load (dev-mode double-effects,
+      // per-tab data fetches, notification polling); 1000/5min was hit by
+      // routine interactive use once the earlier infinite-loop bug is fixed.
     }),
   );
 
