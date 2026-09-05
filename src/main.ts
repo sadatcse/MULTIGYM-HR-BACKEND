@@ -37,6 +37,7 @@ async function bootstrap() {
     process.env.ALLOWED_ORIGINS?.split(',') || [
       'http://localhost:3000',
       'http://localhost:3001',
+      'https://multigym-next.vercel.app'
     ]
   )
     .map((url) => url.trim().replace(/\/$/, ''))
