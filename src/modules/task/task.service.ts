@@ -1383,13 +1383,24 @@ export class TaskService {
     const branch = query?.branch ? String(query.branch).trim() : null;
     const hasBranchFilter = !!(branch && branch !== 'all' && branch !== 'All Branches');
 
+    // Build branch regex that handles dash variants (— vs -) and 'MULTIGYM' vs 'Multi Gym'
+    let branchRegex: RegExp | null = null;
+    if (hasBranchFilter && branch) {
+      if (/^multigym$/i.test(branch.replace(/[\s_-]+/g, ''))) {
+        branchRegex = /^multi\s*gym.*$/i;
+      } else {
+        const pattern = branch.replace(/[—–-]/g, '[-—–\\s]+');
+        branchRegex = new RegExp(`^${pattern}$`, 'i');
+      }
+    }
+
     if (type === 'source-wise') {
       const pipeline: any[] = [];
-      if (hasBranchFilter) {
+      if (hasBranchFilter && branchRegex) {
         pipeline.push({
           $match: {
             $or: [
-              { branch: { $regex: new RegExp(`^${branch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } },
+              { branch: { $regex: branchRegex } },
               { branch: 'All Branches' },
             ],
           },
@@ -1448,10 +1459,10 @@ export class TaskService {
 
     if (type === 'branch-wise') {
       const pipeline: any[] = [];
-      if (hasBranchFilter) {
+      if (hasBranchFilter && branchRegex) {
         pipeline.push({
           $match: {
-            branch: { $regex: new RegExp(`^${branch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+            branch: { $regex: branchRegex },
           },
         });
       }
@@ -1524,8 +1535,7 @@ export class TaskService {
         { $unwind: '$empInfo' },
       ];
 
-      if (hasBranchFilter) {
-        const branchRegex = new RegExp(`^${branch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+      if (hasBranchFilter && branchRegex) {
         pipeline.push({
           $match: {
             $or: [
