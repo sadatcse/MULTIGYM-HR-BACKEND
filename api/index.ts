@@ -1,21 +1,28 @@
-import serverless from 'serverless-http';
 import { createApp } from '../src/main';
 
 // Cached across warm invocations of the same Lambda instance so we don't
 // re-bootstrap Nest (and re-open a Mongoose connection) on every request —
 // cold starts still pay the full init cost once.
-let cachedHandler: ReturnType<typeof serverless> | null = null;
+//
+// Vercel's Node.js runtime hands this file real (req, res) objects — the
+// same signature Node's own http.createServer() uses — and an Express app
+// instance is directly callable with that exact signature, so no adapter
+// library is needed here. (An earlier version of this file used
+// serverless-http, which expects AWS Lambda's event/context shape instead;
+// handing it Vercel's real req/res silently hung every request forever,
+// since it never wrote anything back to the actual res.)
+let cachedExpressApp: any = null;
 
-async function getHandler() {
-  if (!cachedHandler) {
+async function getExpressApp() {
+  if (!cachedExpressApp) {
     const app = await createApp();
     await app.init();
-    cachedHandler = serverless(app.getHttpAdapter().getInstance());
+    cachedExpressApp = app.getHttpAdapter().getInstance();
   }
-  return cachedHandler;
+  return cachedExpressApp;
 }
 
 export default async function handler(req: any, res: any) {
-  const h = await getHandler();
-  return h(req, res);
+  const expressApp = await getExpressApp();
+  expressApp(req, res);
 }
