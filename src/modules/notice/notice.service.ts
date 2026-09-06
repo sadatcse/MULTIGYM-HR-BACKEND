@@ -13,6 +13,15 @@ import { Employee, EmployeeDocument } from '../user/schemas/employee.schema';
 import { CreateNoticeDto } from './dto/create-notice.dto';
 import { UpdateNoticeDto } from './dto/update-notice.dto';
 
+// Same hardcoded floor as task.service.ts / maintenance.service.ts: none of
+// the "admin/*" notice endpoints have a configured role-permission entry for
+// ANY role (checked live — even ADMIN/SUPER ADMIN have none), so
+// PermissionsGuard's "unconfigured = allow" default currently lets any
+// authenticated employee publish, edit, delete, or blast reminders for
+// company-wide notices. This closes that the same way Task/Maintenance's
+// approve/reject actions were closed.
+const ADMIN_ROLES = ['SUPERADMIN', 'SUPER ADMIN', 'ADMIN', 'DIRECTOR', 'MANAGER', 'MD'];
+
 @Injectable()
 export class NoticeService {
   constructor(
@@ -21,6 +30,11 @@ export class NoticeService {
     @InjectModel(NoticeAuditLog.name) private readonly auditLogModel: Model<NoticeAuditLogDocument>,
     @InjectModel(Employee.name) private readonly employeeModel: Model<EmployeeDocument>,
   ) {}
+
+  private isManagerOrAdmin(role?: string): boolean {
+    if (!role) return false;
+    return ADMIN_ROLES.includes(role.toUpperCase());
+  }
 
   // Log Audit Event helper
   private async logAuditEvent(
@@ -46,6 +60,10 @@ export class NoticeService {
 
   // Create Notice
   async createNotice(dto: CreateNoticeDto, user: any): Promise<Notice> {
+    if (!this.isManagerOrAdmin(user?.role)) {
+      throw new ForbiddenException('Only management and administrative roles can create notices');
+    }
+
     const actorId = user._id || user.id || user.sub;
 
     const notice = new this.noticeModel({
@@ -73,6 +91,10 @@ export class NoticeService {
 
   // Update Notice
   async updateNotice(id: string, dto: UpdateNoticeDto, user: any): Promise<Notice> {
+    if (!this.isManagerOrAdmin(user?.role)) {
+      throw new ForbiddenException('Only management and administrative roles can edit notices');
+    }
+
     const actorId = user._id || user.id || user.sub;
     const notice = await this.noticeModel.findById(id);
     if (!notice) {
@@ -96,6 +118,10 @@ export class NoticeService {
 
   // Publish Notice & Resolve Target Recipients
   async publishNotice(id: string, user: any): Promise<Notice> {
+    if (!this.isManagerOrAdmin(user?.role)) {
+      throw new ForbiddenException('Only management and administrative roles can publish notices');
+    }
+
     const actorId = user._id || user.id || user.sub;
     const notice = await this.noticeModel.findById(id);
     if (!notice) {
@@ -114,7 +140,7 @@ export class NoticeService {
     } else if (notice.targetType === TargetType.DESIGNATION && notice.targetDesignations?.length > 0) {
       recipientQuery.jobPosition = { $in: notice.targetDesignations };
     } else if (notice.targetType === TargetType.BRANCH && notice.targetBranches?.length > 0) {
-      recipientQuery.branch = { $in: notice.targetBranches };
+      recipientQuery.branches = { $in: notice.targetBranches };
     } else if (notice.targetType === TargetType.EMPLOYEES && notice.targetEmployees?.length > 0) {
       const employeeIds = notice.targetEmployees.map((e) => new Types.ObjectId(e.toString()));
       recipientQuery._id = { $in: employeeIds };
@@ -432,7 +458,7 @@ export class NoticeService {
 
     const recipients = await this.recipientModel
       .find(recipientMatch)
-      .populate('employee', 'name employeeId department jobPosition branch photo email mobileNumber')
+      .populate('employee', 'name employeeId department jobPosition branches photo email mobileNumber')
       .sort({ createdAt: -1 })
       .exec();
 
@@ -477,6 +503,10 @@ export class NoticeService {
 
   // Admin: Send Reminder to Pending Recipients
   async sendReminder(id: string, user: any): Promise<any> {
+    if (!this.isManagerOrAdmin(user?.role)) {
+      throw new ForbiddenException('Only management and administrative roles can send notice reminders');
+    }
+
     const actorId = user._id || user.id || user.sub;
     const notice = await this.noticeModel.findById(id);
     if (!notice) {
@@ -551,6 +581,10 @@ export class NoticeService {
 
   // Admin: Delete Notice
   async deleteNotice(id: string, user: any): Promise<any> {
+    if (!this.isManagerOrAdmin(user?.role)) {
+      throw new ForbiddenException('Only management and administrative roles can delete notices');
+    }
+
     const notice = await this.noticeModel.findById(id);
     if (!notice) {
       throw new NotFoundException('Notice not found');

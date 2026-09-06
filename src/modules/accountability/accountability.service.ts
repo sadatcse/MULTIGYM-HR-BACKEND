@@ -394,7 +394,7 @@ export class AccountabilityService {
         .find({
           $or: [{ name: regex }, { employeeId: regex }, { department: regex }, { email: regex }],
         })
-        .select('name employeeId department branch role email photo')
+        .select('name employeeId department branches role email photo')
         .limit(10)
         .lean(),
     ]);
@@ -430,7 +430,7 @@ export class AccountabilityService {
         id: e._id,
         type: 'EMPLOYEE',
         title: e.name,
-        subtitle: `${e.employeeId || ''} • ${e.department || ''} • ${e.branch || ''}`,
+        subtitle: `${e.employeeId || ''} • ${e.department || ''} • ${(e.branches || []).join(', ')}`,
         url: `/dashboard/accountability/reports?employee=${e._id}`,
       });
     });

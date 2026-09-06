@@ -98,7 +98,7 @@ export class ManagementPersonService implements OnModuleInit {
         if (!payload.email) payload.email = emp.email;
         if (!payload.phone) payload.phone = (emp as any).mobileNumber || (emp as any).phone || '';
         if (!payload.department) payload.department = emp.department;
-        if (!payload.branch) payload.branch = emp.branch;
+        if (!payload.branch) payload.branch = (emp as any).branches?.[0];
         if (!payload.avatar) payload.avatar = (emp as any).photo || '';
       }
     } else {
@@ -142,7 +142,7 @@ export class ManagementPersonService implements OnModuleInit {
     const [data, total] = await Promise.all([
       this.managementPersonModel
         .find(filter)
-        .populate('employee', 'name email phone photo designation employeeId department branch')
+        .populate('employee', 'name email phone photo designation employeeId department branches')
         .sort({ priorityOrder: 1, createdAt: 1 })
         .skip(skip)
         .limit(limit)
@@ -179,7 +179,7 @@ export class ManagementPersonService implements OnModuleInit {
   async findAllActive() {
     return this.managementPersonModel
       .find({ status: 'active' })
-      .populate('employee', 'name email phone photo designation employeeId department branch')
+      .populate('employee', 'name email phone photo designation employeeId department branches')
       .sort({ priorityOrder: 1, createdAt: 1 })
       .exec();
   }
@@ -193,7 +193,7 @@ export class ManagementPersonService implements OnModuleInit {
     }
     const doc = await this.managementPersonModel
       .findById(id)
-      .populate('employee', 'name email phone photo designation employeeId department branch')
+      .populate('employee', 'name email phone photo designation employeeId department branches')
       .exec();
     if (!doc) {
       throw new NotFoundException('Management person not found');
@@ -222,7 +222,7 @@ export class ManagementPersonService implements OnModuleInit {
           if (!payload.email) payload.email = emp.email;
           if (!payload.phone) payload.phone = (emp as any).mobileNumber || (emp as any).phone || '';
           if (!payload.department) payload.department = emp.department;
-          if (!payload.branch) payload.branch = emp.branch;
+          if (!payload.branch) payload.branch = (emp as any).branches?.[0];
           if (!payload.avatar) payload.avatar = (emp as any).photo || '';
         }
       } else {
@@ -239,7 +239,7 @@ export class ManagementPersonService implements OnModuleInit {
 
     const updated = await this.managementPersonModel
       .findByIdAndUpdate(id, payload, { new: true })
-      .populate('employee', 'name email phone photo designation employeeId department branch')
+      .populate('employee', 'name email phone photo designation employeeId department branches')
       .exec();
 
     if (!updated) {

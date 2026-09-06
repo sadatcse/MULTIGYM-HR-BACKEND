@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { IsArray, IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, ValidateNested } from 'class-validator';
 
 export class AddressDto {
   @IsOptional()
@@ -116,9 +116,9 @@ export class CreateEmployeeDto {
   @IsIn(['active', 'probation', 'resigned', 'terminated', 'inactive'])
   status?: string;
 
+  @IsArray()
   @IsOptional()
-  @IsString()
-  branch?: string;
+  branches?: string[];
 
   @IsOptional()
   @IsString()

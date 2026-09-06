@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, Req, UseGuards } from '@nestjs/common';
+import { Request } from 'express';
 import { RoleService } from './role.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
@@ -14,8 +15,8 @@ export class RoleController {
   @Post()
   @UseGuards(PermissionsGuard)
   @RequirePermission('roles', 'add')
-  async create(@Body() createRoleDto: CreateRoleDto) {
-    const data = await this.roleService.create(createRoleDto);
+  async create(@Body() createRoleDto: CreateRoleDto, @Req() req: Request) {
+    const data = await this.roleService.create(createRoleDto, (req as any).user?.role);
     return { success: true, message: 'User role created successfully', data };
   }
 
@@ -50,15 +51,15 @@ export class RoleController {
   @Patch(':id')
   @UseGuards(PermissionsGuard)
   @RequirePermission('roles', 'edit')
-  async update(@Param('id') id: string, @Body() updateRoleDto: UpdateRoleDto) {
-    const data = await this.roleService.update(id, updateRoleDto);
+  async update(@Param('id') id: string, @Body() updateRoleDto: UpdateRoleDto, @Req() req: Request) {
+    const data = await this.roleService.update(id, updateRoleDto, (req as any).user?.role);
     return { success: true, message: 'User role updated successfully', data };
   }
 
   @Delete(':id')
   @UseGuards(PermissionsGuard)
   @RequirePermission('roles', 'delete')
-  async remove(@Param('id') id: string) {
-    return this.roleService.remove(id);
+  async remove(@Param('id') id: string, @Req() req: Request) {
+    return this.roleService.remove(id, (req as any).user?.role);
   }
 }

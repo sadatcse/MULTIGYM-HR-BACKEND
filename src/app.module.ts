@@ -43,6 +43,7 @@ import { TaskModule } from './modules/task/task.module';
 import { AccountabilityModule } from './modules/accountability/accountability.module';
 import { ManagementPersonModule } from './modules/management-person/management-person.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
+import { CronModule } from './modules/cron/cron.module';
 
 @Module({
   imports: [
@@ -95,6 +96,7 @@ import { MaintenanceModule } from './modules/maintenance/maintenance.module';
     AccountabilityModule,
     ManagementPersonModule,
     MaintenanceModule,
+    CronModule,
   ],
   controllers: [AppController],
   providers: [TransactionLoggerMiddleware],

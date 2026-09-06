@@ -170,7 +170,7 @@ export class TaskService {
     // Verify assignees exist
     const validEmployees = await this.employeeModel
       .find({ _id: { $in: allUniqueAssigneeIds } })
-      .select('_id name email role branch department');
+      .select('_id name email role branches department');
     if (validEmployees.length === 0) {
       throw new BadRequestException('No valid assignees found for provided IDs');
     }
@@ -347,7 +347,7 @@ export class TaskService {
     const taskIds = tasks.map((t) => t._id);
     const assignees = await this.assigneeModel
       .find({ task: { $in: taskIds } })
-      .populate('employee', 'name email photo employeeId department branch')
+      .populate('employee', 'name email photo employeeId department branches')
       .lean();
 
     const assigneeMap = new Map<string, any[]>();
@@ -467,13 +467,13 @@ export class TaskService {
 
     const task = await this.taskModel
       .findById(id)
-      .populate('issuedBy', 'name email photo employeeId role department branch')
+      .populate('issuedBy', 'name email photo employeeId role department branches')
       .populate('createdBy', 'name email photo employeeId role')
       .populate('relatedNotice', 'title category priority')
-      .populate('relatedEmployee', 'name email employeeId department branch')
+      .populate('relatedEmployee', 'name email employeeId department branches')
       .populate('deadlineHistory.changedBy', 'name employeeId')
       .populate('cancelledBy', 'name employeeId')
-      .populate('items.assignees', 'name email photo employeeId department branch')
+      .populate('items.assignees', 'name email photo employeeId department branches')
       .populate('items.approvedBy', 'name employeeId')
       .lean();
 
@@ -484,7 +484,7 @@ export class TaskService {
     // Load assignees with employee profile
     const assignees = await this.assigneeModel
       .find({ task: id })
-      .populate('employee', 'name email photo employeeId department branch jobPosition mobileNumber')
+      .populate('employee', 'name email photo employeeId department branches jobPosition mobileNumber')
       .populate('approvedBy', 'name employeeId')
       .populate('rejectionHistory.rejectedBy', 'name employeeId')
       .populate('submissionHistory.reviewedBy', 'name employeeId')
@@ -1360,7 +1360,7 @@ export class TaskService {
     const taskIds = tasks.map((t) => t._id);
     const assignees = await this.assigneeModel
       .find({ task: { $in: taskIds } })
-      .populate('employee', 'name photo employeeId department branch')
+      .populate('employee', 'name photo employeeId department branches')
       .lean();
 
     const assigneeMap = new Map<string, any[]>();
@@ -1587,10 +1587,10 @@ export class TaskService {
         pipeline.push({
           $match: {
             $or: [
-              { 'empInfo.branch': { $regex: branchRegex } },
+              { 'empInfo.branches': { $regex: branchRegex } },
               {
                 $and: [
-                  { $or: [{ 'empInfo.branch': { $exists: false } }, { 'empInfo.branch': null }, { 'empInfo.branch': '' }, { 'empInfo.branch': 'N/A' }] },
+                  { $or: [{ 'empInfo.branches': { $exists: false } }, { 'empInfo.branches': null }, { 'empInfo.branches': { $size: 0 } }] },
                   { 'taskInfo.branch': { $regex: branchRegex } },
                 ],
               },
@@ -1619,7 +1619,7 @@ export class TaskService {
             name: { $first: '$empInfo.name' },
             employeeId: { $first: '$empInfo.employeeId' },
             department: { $first: '$empInfo.department' },
-            branch: { $first: '$empInfo.branch' },
+            branches: { $first: '$empInfo.branches' },
             totalTasks: { $sum: 1 },
             completed: {
               $sum: { $cond: [{ $eq: ['$status', TaskStatus.COMPLETED] }, 1, 0] },
@@ -1660,7 +1660,7 @@ export class TaskService {
         employeeId: item.employeeId || 'N/A',
         name: item.name,
         department: item.department || 'N/A',
-        branch: item.branch || 'N/A',
+        branch: (item.branches || []).join(', ') || 'N/A',
         totalTasks: item.totalTasks,
         completed: item.completed,
         inProgress: item.inProgress,
@@ -1833,13 +1833,13 @@ export class TaskService {
     if (Types.ObjectId.isValid(employeeId)) {
       employeeDoc = await this.employeeModel
         .findById(employeeId)
-        .select('name email employeeId designation department branch photo role')
+        .select('name email employeeId designation department branches photo role')
         .lean();
     }
     if (!employeeDoc) {
       employeeDoc = await this.employeeModel
         .findOne({ employeeId })
-        .select('name email employeeId designation department branch photo role')
+        .select('name email employeeId designation department branches photo role')
         .lean();
     }
     if (!employeeDoc) {

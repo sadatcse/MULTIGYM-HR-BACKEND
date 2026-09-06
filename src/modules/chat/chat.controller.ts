@@ -1,8 +1,9 @@
-import { Controller, Get, HttpCode, HttpStatus, Param, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { ChatService } from './chat.service';
 import { PresenceService } from './presence.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SendMessageDto } from './dto/send-message.dto';
 
 @Controller('chat')
 export class ChatController {
@@ -10,6 +11,16 @@ export class ChatController {
     private readonly chatService: ChatService,
     private readonly presenceService: PresenceService,
   ) {}
+
+  // Chat runs over plain REST — see chat.gateway.ts for why the Socket.IO
+  // gateway that used to handle this (`message:send`) is disabled.
+  @Post('messages')
+  @UseGuards(JwtAuthGuard)
+  async sendMessage(@Req() req: Request, @Body() dto: SendMessageDto) {
+    const userId = (req as any).user.id;
+    const data = await this.chatService.sendMessage(userId, dto.receiverId, dto.content);
+    return { statusCode: HttpStatus.CREATED, message: 'Message sent successfully', data };
+  }
 
   @Get('conversations')
   @UseGuards(JwtAuthGuard)

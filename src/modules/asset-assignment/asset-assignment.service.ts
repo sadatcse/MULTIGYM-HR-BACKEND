@@ -54,7 +54,7 @@ export class AssetAssignmentService implements OnModuleInit {
           assignment.employeeCode = emp.employeeId || 'N/A';
           assignment.departmentName = typeof emp.department === 'string' ? emp.department : emp.department?.name || 'N/A';
           assignment.designationName = typeof emp.jobPosition === 'string' ? emp.jobPosition : emp.jobPosition?.name || (emp as any).designation || 'N/A';
-          assignment.branchName = typeof emp.branch === 'string' ? emp.branch : emp.branch?.name || 'N/A';
+          assignment.branchName = Array.isArray(emp.branches) && emp.branches.length > 0 ? emp.branches[0] : 'N/A';
         } else {
           assignment.employeeName = 'Archived Employee';
           assignment.employeeCode = 'N/A';
@@ -139,7 +139,7 @@ export class AssetAssignmentService implements OnModuleInit {
     const employeeCode = employee.employeeId || 'N/A';
     const departmentName = typeof employee.department === 'string' ? employee.department : (employee.department as any)?.name || 'N/A';
     const designationName = typeof (employee as any).jobPosition === 'string' ? (employee as any).jobPosition : (employee as any).jobPosition?.name || (employee as any).designation || 'N/A';
-    const branchName = typeof employee.branch === 'string' ? employee.branch : (employee.branch as any)?.name || 'N/A';
+    const branchName = Array.isArray(employee.branches) && employee.branches.length > 0 ? employee.branches[0] : 'N/A';
 
     // 3. Create Assignment Record
     const created = await this.assignmentModel.create({

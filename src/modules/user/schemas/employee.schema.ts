@@ -105,8 +105,12 @@ export class Employee {
   })
   status: string;
 
-  @Prop()
-  branch?: string;
+  // An employee can be attached to more than one branch (e.g. staff who
+  // split their time across locations) — the first entry is treated as
+  // their primary branch anywhere a single value is needed (asset/
+  // maintenance snapshots, management-person records, etc).
+  @Prop({ type: [String], default: [] })
+  branches: string[];
 
   @Prop()
   shift?: string;

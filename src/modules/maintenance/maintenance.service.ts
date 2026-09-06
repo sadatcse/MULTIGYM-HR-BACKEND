@@ -58,13 +58,13 @@ export class MaintenanceService {
   // requester's own employee record, never taken from the client.
   async createRequest(dto: CreateMaintenanceRequestDto, user: any) {
     const userId = this.getUserId(user);
-    const employee = await this.employeeModel.findById(userId).select('branch');
+    const employee = await this.employeeModel.findById(userId).select('branches');
     if (!employee) {
       throw new BadRequestException('Employee profile not found for the current user');
     }
 
     const request = new this.requestModel({
-      branch: employee.branch || 'All Branches',
+      branch: employee.branches?.[0] || 'All Branches',
       category: dto.category,
       issue: dto.issue.trim(),
       description: dto.description?.trim(),

@@ -1,8 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { RolePermission, RolePermissionDocument } from './schemas/role-permission.schema';
 import { CreateRolePermissionDto } from './dto/create-role-permission.dto';
+
+// Deliberately NOT the broader task/maintenance ADMIN_ROLES list — the live
+// permission data has ADMIN's own "role-permissions" entry explicitly set to
+// all-false, so ADMIN is meant to be excluded here too. Matches
+// PermissionsGuard's own SUPER_ADMIN_ROLES bypass list exactly.
+const SUPER_ADMIN_ROLES = ['SUPERADMIN', 'SUPER ADMIN'];
 
 @Injectable()
 export class RolePermissionService {
@@ -11,7 +17,23 @@ export class RolePermissionService {
     private readonly rolePermissionModel: Model<RolePermissionDocument>,
   ) {}
 
-  async createOrUpdate(dto: CreateRolePermissionDto) {
+  private isSuperAdmin(role?: string): boolean {
+    if (!role) return false;
+    return SUPER_ADMIN_ROLES.includes(role.toUpperCase());
+  }
+
+  // Hardcoded floor alongside the configurable RequirePermission guard:
+  // PermissionsGuard allows an action by default when a role has no stored
+  // entry for a module (so a newly added module never accidentally locks
+  // out an existing role) — but role-permissions is the one module where
+  // that default-allow is a privilege-escalation hole (any role with no
+  // configured "role-permissions" entry could otherwise grant itself admin
+  // rights on everything). See PermissionsGuard for the general policy.
+  async createOrUpdate(dto: CreateRolePermissionDto, actingUserRole?: string) {
+    if (!this.isSuperAdmin(actingUserRole)) {
+      throw new ForbiddenException('Only Super Admin can modify role permissions');
+    }
+
     const { role, permissions } = dto;
     const roleUpper = role.toUpperCase();
 
@@ -45,7 +67,11 @@ export class RolePermissionService {
     return this.rolePermissionModel.find({});
   }
 
-  async remove(role: string) {
+  async remove(role: string, actingUserRole?: string) {
+    if (!this.isSuperAdmin(actingUserRole)) {
+      throw new ForbiddenException('Only Super Admin can delete role permissions');
+    }
+
     const result = await this.rolePermissionModel.findOneAndDelete({
       role: role.toUpperCase(),
     });

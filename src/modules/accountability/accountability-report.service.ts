@@ -85,7 +85,7 @@ export class AccountabilityReportService {
       // Complete per-employee accountability matrix
       const employees = await this.employeeModel
         .find({ status: { $ne: 'deleted' } })
-        .select('name employeeId department branch role email photo')
+        .select('name employeeId department branches role email photo')
         .sort({ name: 1 })
         .limit(100)
         .lean();
@@ -151,7 +151,7 @@ export class AccountabilityReportService {
           employeeId: emp.employeeId || 'N/A',
           name: emp.name,
           department: emp.department || 'N/A',
-          branch: emp.branch || 'N/A',
+          branch: (emp.branches || []).join(', ') || 'N/A',
           noticesReceived: nData.total,
           noticesSeen: nData.seen,
           noticesAcknowledged: nData.acknowledged,

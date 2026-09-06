@@ -8,9 +8,13 @@ import rateLimit from 'express-rate-limit';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
-async function bootstrap() {
+// Builds and configures the Nest app without starting a listener, so it can
+// be reused both by the local dev server (bootstrap() below, which calls
+// app.listen()) and by api/index.ts's Vercel serverless handler (which
+// calls app.init() and hands the underlying Express instance to
+// serverless-http instead — a Vercel function can't call app.listen()).
+export async function createApp() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  const port = process.env.PORT || 8000;
 
   // Security middleware
   app.use(
@@ -68,7 +72,21 @@ async function bootstrap() {
   );
   app.useGlobalFilters(new AllExceptionsFilter());
 
+  return app;
+}
+
+async function bootstrap() {
+  const app = await createApp();
+  const port = process.env.PORT || 8000;
   await app.listen(port);
   console.log(`Server started at ${new Date()}`);
 }
-bootstrap();
+
+// Only start a listening server when this file is run directly (local dev /
+// a traditional Node host). api/index.ts imports createApp() from this same
+// file for the Vercel serverless path, and importing a module always runs
+// its top-level code — this guard is what stops that import from also
+// calling app.listen() on a platform that doesn't support it.
+if (require.main === module) {
+  bootstrap();
+}

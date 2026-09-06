@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Delete, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Query, Req, UseGuards } from '@nestjs/common';
+import { Request } from 'express';
 import { RolePermissionService } from './role-permission.service';
 import { CreateRolePermissionDto } from './dto/create-role-permission.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -11,12 +12,14 @@ export class RolePermissionController {
   constructor(private readonly service: RolePermissionService) {}
 
   // Write access is gated (previously open to any unauthenticated request,
-  // which let anyone grant themselves full permissions on any role).
+  // which let anyone grant themselves full permissions on any role). The
+  // service also enforces a hardcoded Super-Admin-only floor on top of this
+  // configurable check — see RolePermissionService for why.
   @Post()
   @UseGuards(PermissionsGuard)
   @RequirePermission('role-permissions', 'edit')
-  async createOrUpdate(@Body() dto: CreateRolePermissionDto) {
-    const data = await this.service.createOrUpdate(dto);
+  async createOrUpdate(@Body() dto: CreateRolePermissionDto, @Req() req: Request) {
+    const data = await this.service.createOrUpdate(dto, (req as any).user?.role);
     return { success: true, message: 'Permissions saved successfully', data };
   }
 
@@ -40,7 +43,7 @@ export class RolePermissionController {
   @Delete()
   @UseGuards(PermissionsGuard)
   @RequirePermission('role-permissions', 'delete')
-  async remove(@Body('role') role: string) {
-    return this.service.remove(role);
+  async remove(@Body('role') role: string, @Req() req: Request) {
+    return this.service.remove(role, (req as any).user?.role);
   }
 }

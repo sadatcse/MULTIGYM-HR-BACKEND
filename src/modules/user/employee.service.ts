@@ -41,7 +41,7 @@ export class EmployeeService {
           { nidPassport: { $regex: search, $options: 'i' } },
           { department: { $regex: search, $options: 'i' } },
           { jobPosition: { $regex: search, $options: 'i' } },
-          { branch: { $regex: search, $options: 'i' } },
+          { branches: { $regex: search, $options: 'i' } },
           { role: { $regex: search, $options: 'i' } },
           { 'presentAddress.city': { $regex: search, $options: 'i' } },
           { 'presentAddress.area': { $regex: search, $options: 'i' } },
@@ -64,7 +64,7 @@ export class EmployeeService {
       }
 
       if (branch && branch !== 'all') {
-        queryFilter.branch = branch;
+        queryFilter.branches = branch;
       }
 
       if (employeeType && employeeType !== 'all') {
