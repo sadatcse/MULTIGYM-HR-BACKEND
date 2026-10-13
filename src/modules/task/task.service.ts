@@ -38,6 +38,15 @@ import {
   TaskCategoryDocument,
 } from './schemas/task-category.schema';
 import { Employee, EmployeeDocument } from '../user/schemas/employee.schema';
+import {
+  MaintenanceRequest,
+  MaintenanceRequestDocument,
+  MaintenanceStatus,
+} from '../maintenance/schemas/maintenance-request.schema';
+import {
+  MaintenanceWorkUpdate,
+  MaintenanceWorkUpdateDocument,
+} from '../maintenance/schemas/maintenance-work-update.schema';
 import { CreateTaskDto, SubtaskItemDto } from './dto/create-task.dto';
 import {
   UpdateTaskDto,
@@ -94,8 +103,62 @@ export class TaskService {
     @InjectModel(Employee.name)
     private readonly employeeModel: Model<EmployeeDocument>,
     @Optional()
+    @InjectModel(MaintenanceRequest.name)
+    private readonly maintenanceRequestModel?: Model<MaintenanceRequestDocument>,
+    @Optional()
+    @InjectModel(MaintenanceWorkUpdate.name)
+    private readonly maintenanceWorkUpdateModel?: Model<MaintenanceWorkUpdateDocument>,
+    @Optional()
     private readonly chatGateway?: ChatGateway,
   ) {}
+
+  // Synchronize status and audit updates back to parent maintenance request if this task originated from maintenance
+  private async syncMaintenanceOnTaskProgress(
+    task: TaskDocument,
+    actorId: Types.ObjectId,
+    statusUpdate?: string,
+    newStatus?: MaintenanceStatus,
+    afterPhotos?: string[],
+  ) {
+    if (!task.relatedMaintenanceRequest || !this.maintenanceRequestModel) return;
+    try {
+      const maintenance = await this.maintenanceRequestModel.findById(task.relatedMaintenanceRequest);
+      if (!maintenance) return;
+
+      if (newStatus) {
+        maintenance.status = newStatus;
+        if (newStatus === MaintenanceStatus.COMPLETED) {
+          maintenance.completedDate = new Date();
+          if (afterPhotos && afterPhotos.length > 0) {
+            maintenance.afterPhotos = Array.from(new Set([...(maintenance.afterPhotos || []), ...afterPhotos]));
+          }
+        }
+      } else if (
+        maintenance.status === MaintenanceStatus.ASSIGNED ||
+        maintenance.status === MaintenanceStatus.UNDER_REVIEW ||
+        maintenance.status === MaintenanceStatus.OPEN
+      ) {
+        maintenance.status = MaintenanceStatus.IN_PROGRESS;
+      }
+
+      if (statusUpdate) {
+        maintenance.latestWorkUpdate = statusUpdate;
+        if (this.maintenanceWorkUpdateModel) {
+          await this.maintenanceWorkUpdateModel.create({
+            maintenanceRequest: maintenance._id,
+            update: statusUpdate,
+            updatedBy: actorId,
+            photos: afterPhotos || [],
+          });
+        }
+      }
+
+      maintenance.updatedBy = actorId as any;
+      await maintenance.save();
+    } catch (err) {
+      this.logger.warn(`Failed syncing maintenance request ${task.relatedMaintenanceRequest}: ${(err as Error).message}`);
+    }
+  }
 
   async onModuleInit() {
     // Seed default categories if none exist
@@ -336,6 +399,7 @@ export class TaskService {
         .find(filter)
         .populate('issuedBy', 'name email photo employeeId role')
         .populate('createdBy', 'name email employeeId')
+        .populate('relatedMaintenanceRequest', 'category issue status branch priority deadline')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -407,6 +471,7 @@ export class TaskService {
           populate: [
             { path: 'issuedBy', select: 'name email photo employeeId' },
             { path: 'createdBy', select: 'name email' },
+            { path: 'relatedMaintenanceRequest', select: 'category issue status branch priority deadline' },
           ],
         })
         .populate('approvedBy', 'name employeeId')
@@ -470,6 +535,7 @@ export class TaskService {
       .populate('issuedBy', 'name email photo employeeId role department branches')
       .populate('createdBy', 'name email photo employeeId role')
       .populate('relatedNotice', 'title category priority')
+      .populate('relatedMaintenanceRequest', 'category issue status branch priority deadline')
       .populate('relatedEmployee', 'name email employeeId department branches')
       .populate('deadlineHistory.changedBy', 'name employeeId')
       .populate('cancelledBy', 'name employeeId')
@@ -653,6 +719,15 @@ export class TaskService {
       comment: 'Employee started working on the task',
     });
 
+    if (task.relatedMaintenanceRequest) {
+      await this.syncMaintenanceOnTaskProgress(
+        task,
+        userId,
+        'Assigned employee started working on the maintenance task',
+        MaintenanceStatus.IN_PROGRESS,
+      );
+    }
+
     return { success: true, message: 'Task started successfully', assignee };
   }
 
@@ -703,6 +778,15 @@ export class TaskService {
       comment: dto.remark ? `Progress updated to ${dto.progress}%: ${dto.remark}` : `Progress updated to ${dto.progress}%`,
     });
 
+    if (task.relatedMaintenanceRequest) {
+      await this.syncMaintenanceOnTaskProgress(
+        task,
+        userId,
+        dto.remark || `Maintenance progress updated to ${dto.progress}%`,
+        MaintenanceStatus.IN_PROGRESS,
+      );
+    }
+
     return { success: true, message: 'Progress updated successfully', progress: dto.progress, overallProgress: avgProgress };
   }
 
@@ -733,6 +817,14 @@ export class TaskService {
     assignee.proofs.push(newProof);
     assignee.lastUpdateAt = new Date();
     await assignee.save();
+
+    if (task.relatedMaintenanceRequest && this.maintenanceRequestModel && dto.url) {
+      try {
+        await this.maintenanceRequestModel.findByIdAndUpdate(task.relatedMaintenanceRequest, {
+          $addToSet: { afterPhotos: dto.url },
+        });
+      } catch (e) {}
+    }
 
     // If subtaskId provided, also save to subtask item
     if (dto.subtaskId && task.items && task.items.length > 0) {
@@ -781,6 +873,17 @@ export class TaskService {
     assignee.proofs.push(...newProofs);
     assignee.lastUpdateAt = new Date();
     await assignee.save();
+
+    if (task.relatedMaintenanceRequest && this.maintenanceRequestModel && newProofs.length > 0) {
+      try {
+        const photoUrls = newProofs.map((p) => p.url).filter(Boolean);
+        if (photoUrls.length > 0) {
+          await this.maintenanceRequestModel.findByIdAndUpdate(task.relatedMaintenanceRequest, {
+            $addToSet: { afterPhotos: { $each: photoUrls } },
+          });
+        }
+      } catch (e) {}
+    }
 
     if (dto.subtaskId && task.items && task.items.length > 0) {
       const item = task.items.find((it) => it._id.toString() === dto.subtaskId);
@@ -954,6 +1057,15 @@ export class TaskService {
         newState: { status: TaskStatus.COMPLETED },
         comment: 'All approval conditions satisfied; task completed',
       });
+
+      if (task.relatedMaintenanceRequest) {
+        await this.syncMaintenanceOnTaskProgress(
+          task,
+          actorId,
+          dto.comment || 'Management approved and completed maintenance task',
+          MaintenanceStatus.COMPLETED,
+        );
+      }
     } else {
       await task.save();
     }
@@ -1021,6 +1133,15 @@ export class TaskService {
     task.status = TaskStatus.IN_PROGRESS;
     await task.save();
 
+    if (task.relatedMaintenanceRequest) {
+      await this.syncMaintenanceOnTaskProgress(
+        task,
+        actorId,
+        `Work returned for revision: ${dto.reason.trim()}`,
+        MaintenanceStatus.IN_PROGRESS,
+      );
+    }
+
     return { success: true, message: 'Task rejected and returned for revision' };
   }
 
@@ -1039,8 +1160,8 @@ export class TaskService {
       throw new ForbiddenException('You are not assigned to this task');
     }
 
-    if (task.completionProofRequired && (!assignee.proofs || assignee.proofs.length === 0)) {
-      throw new BadRequestException('Completion proof is required before marking this task complete');
+    if ((task.completionProofRequired || task.relatedMaintenanceRequest) && (!assignee.proofs || assignee.proofs.length === 0)) {
+      throw new BadRequestException('After picture / completion proof is required before marking this task complete');
     }
 
     assignee.status = TaskStatus.COMPLETED;
@@ -1063,6 +1184,17 @@ export class TaskService {
       task.completedAt = new Date();
       task.progress = 100;
       await task.save();
+
+      if (task.relatedMaintenanceRequest) {
+        const proofUrls = (assignee.proofs || []).map((p) => p.url).filter(Boolean);
+        await this.syncMaintenanceOnTaskProgress(
+          task,
+          userId,
+          'Assigned employee completed maintenance work',
+          MaintenanceStatus.COMPLETED,
+          proofUrls,
+        );
+      }
     }
 
     await this.logAuditEvent(task._id, userId, TaskEventType.TASK_COMPLETED, {
@@ -1146,6 +1278,15 @@ export class TaskService {
       comment: `Task cancelled: ${dto.reason.trim()}`,
     });
 
+    if (task.relatedMaintenanceRequest) {
+      await this.syncMaintenanceOnTaskProgress(
+        task,
+        actorId,
+        `Task cancelled: ${dto.reason.trim()}`,
+        MaintenanceStatus.CANCELLED,
+      );
+    }
+
     return { success: true, message: 'Task cancelled successfully' };
   }
 
@@ -1207,6 +1348,14 @@ export class TaskService {
   async deleteTask(id: string) {
     const task = await this.taskModel.findById(id);
     if (!task) throw new NotFoundException('Task not found');
+
+    if (task.relatedMaintenanceRequest && this.maintenanceRequestModel) {
+      try {
+        await this.maintenanceRequestModel.findByIdAndUpdate(task.relatedMaintenanceRequest, {
+          $unset: { linkedTask: 1 },
+        });
+      } catch (e) {}
+    }
 
     await Promise.all([
       this.taskModel.findByIdAndDelete(id),

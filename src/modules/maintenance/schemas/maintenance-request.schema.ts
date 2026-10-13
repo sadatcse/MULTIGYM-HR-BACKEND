@@ -121,6 +121,9 @@ export class MaintenanceRequest {
 
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Employee' })
   updatedBy?: Employee;
+
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Task' })
+  linkedTask?: any;
 }
 
 export const MaintenanceRequestSchema = SchemaFactory.createForClass(MaintenanceRequest);

@@ -2,7 +2,9 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -18,6 +20,23 @@ import {
 } from './schemas/maintenance-work-update.schema';
 import { Employee, EmployeeDocument } from '../user/schemas/employee.schema';
 import { Vendor, VendorDocument } from '../vendor/schemas/vendor.schema';
+import {
+  Task,
+  TaskDocument,
+  TaskStatus,
+  TaskPriority,
+  InstructionSource,
+  CompletionCondition,
+} from '../task/schemas/task.schema';
+import {
+  TaskAssignee,
+  TaskAssigneeDocument,
+} from '../task/schemas/task-assignee.schema';
+import {
+  TaskAuditLog,
+  TaskAuditLogDocument,
+  TaskEventType,
+} from '../task/schemas/task-audit-log.schema';
 import { CreateMaintenanceRequestDto } from './dto/create-maintenance-request.dto';
 import {
   AssignMaintenanceDto,
@@ -30,7 +49,9 @@ import {
 const ADMIN_ROLES = ['SUPERADMIN', 'SUPER ADMIN', 'ADMIN', 'DIRECTOR', 'MANAGER', 'MD'];
 
 @Injectable()
-export class MaintenanceService {
+export class MaintenanceService implements OnModuleInit {
+  private readonly logger = new Logger(MaintenanceService.name);
+
   constructor(
     @InjectModel(MaintenanceRequest.name)
     private readonly requestModel: Model<MaintenanceRequestDocument>,
@@ -40,7 +61,172 @@ export class MaintenanceService {
     private readonly employeeModel: Model<EmployeeDocument>,
     @InjectModel(Vendor.name)
     private readonly vendorModel: Model<VendorDocument>,
+    @InjectModel(Task.name)
+    private readonly taskModel: Model<TaskDocument>,
+    @InjectModel(TaskAssignee.name)
+    private readonly assigneeModel: Model<TaskAssigneeDocument>,
+    @InjectModel(TaskAuditLog.name)
+    private readonly auditLogModel: Model<TaskAuditLogDocument>,
   ) {}
+
+  async onModuleInit() {
+    try {
+      // Auto-backfill: find employee-assigned maintenance requests without linked tasks
+      const unlinked = await this.requestModel.find({
+        assignedToType: MaintenanceAssigneeType.EMPLOYEE,
+        assignedToEmployee: { $ne: null },
+        $or: [{ linkedTask: { $exists: false } }, { linkedTask: null }],
+      });
+
+      if (unlinked.length > 0) {
+        this.logger.log(`Found ${unlinked.length} unlinked maintenance requests with employee assignees. Backfilling tasks...`);
+        for (const req of unlinked) {
+          try {
+            const fallbackActor = (req.updatedBy || req.createdBy || req.assignedToEmployee) as any;
+            await this.syncTaskForMaintenance(req, fallbackActor);
+            await req.save();
+          } catch (itemErr) {
+            this.logger.warn(`Failed backfilling task for maintenance request ${req._id}: ${(itemErr as Error).message}`);
+          }
+        }
+        this.logger.log(`Maintenance task backfill completed.`);
+      }
+    } catch (err) {
+      this.logger.warn(`Maintenance onModuleInit backfill skipped: ${(err as Error).message}`);
+    }
+  }
+
+  // Synchronize or create a real task in the Tasks collection for an employee-assigned maintenance request
+  async syncTaskForMaintenance(request: MaintenanceRequestDocument, actorId: Types.ObjectId) {
+    if (!request.assignedToEmployee) return null;
+
+    let taskPriority = TaskPriority.MEDIUM;
+    const reqPriority = (request.priority || '').toUpperCase();
+    if (reqPriority === 'URGENT') taskPriority = TaskPriority.URGENT;
+    else if (reqPriority === 'HIGH') taskPriority = TaskPriority.HIGH;
+    else if (reqPriority === 'LOW') taskPriority = TaskPriority.LOW;
+
+    const deadline = request.deadline
+      ? new Date(request.deadline)
+      : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    const taskTitle = `[Maintenance] ${request.category || 'General'}: ${request.issue}`;
+    const taskDesc = request.description
+      ? `${request.description}\n\n[Maintenance Work Order Details]\nBranch: ${request.branch}\nCategory: ${request.category}\nEstimated Cost: ৳${request.estimatedCost || 0}`
+      : `Maintenance work order for ${request.category} at ${request.branch}.\nIssue: ${request.issue}\nEstimated Cost: ৳${request.estimatedCost || 0}`;
+
+    // If already linked to a task, update the existing task
+    if (request.linkedTask) {
+      const existingTask = await this.taskModel.findById(request.linkedTask);
+      if (existingTask) {
+        existingTask.title = taskTitle;
+        existingTask.description = taskDesc;
+        existingTask.priority = taskPriority;
+        existingTask.deadline = deadline;
+        existingTask.branch = request.branch || existingTask.branch;
+        existingTask.relatedMaintenanceRequest = request._id;
+        if (request.status === MaintenanceStatus.COMPLETED) {
+          existingTask.status = TaskStatus.COMPLETED;
+          existingTask.progress = 100;
+          existingTask.completedAt = new Date();
+        } else if (request.status === MaintenanceStatus.IN_PROGRESS && existingTask.status === TaskStatus.PENDING) {
+          existingTask.status = TaskStatus.IN_PROGRESS;
+        }
+        await existingTask.save();
+
+        // Ensure task assignee document exists
+        const existingAssignee = await this.assigneeModel.findOne({
+          task: existingTask._id,
+          employee: request.assignedToEmployee,
+        });
+
+        if (!existingAssignee) {
+          await this.assigneeModel.create({
+            task: existingTask._id,
+            employee: request.assignedToEmployee,
+            status: existingTask.status || TaskStatus.PENDING,
+            progress: existingTask.progress || 0,
+            startedAt: existingTask.status === TaskStatus.IN_PROGRESS ? new Date() : undefined,
+            completedAt: existingTask.status === TaskStatus.COMPLETED ? new Date() : undefined,
+          });
+        } else {
+          if (request.status === MaintenanceStatus.COMPLETED) {
+            existingAssignee.status = TaskStatus.COMPLETED;
+            existingAssignee.progress = 100;
+            existingAssignee.completedAt = new Date();
+            await existingAssignee.save();
+          }
+        }
+        return existingTask;
+      }
+    }
+
+    // Determine initial task status based on maintenance request status
+    let initialStatus = TaskStatus.PENDING;
+    let initialProgress = 0;
+    if (request.status === MaintenanceStatus.COMPLETED) {
+      initialStatus = TaskStatus.COMPLETED;
+      initialProgress = 100;
+    } else if (request.status === MaintenanceStatus.IN_PROGRESS) {
+      initialStatus = TaskStatus.IN_PROGRESS;
+    }
+
+    const newTask = new this.taskModel({
+      title: taskTitle,
+      description: taskDesc,
+      instructionSource: InstructionSource.MANAGEMENT,
+      instructionSourceCustom: 'Maintenance Work Order',
+      issuedBy: actorId,
+      branch: request.branch || 'All Branches',
+      department: 'Maintenance',
+      category: 'Maintenance',
+      priority: taskPriority,
+      instructionDate: request.reportedDate || new Date(),
+      startDate: new Date(),
+      deadline,
+      status: initialStatus,
+      progress: initialProgress,
+      approvalRequired: false,
+      completionProofRequired: true,
+      completionCondition: CompletionCondition.ALL_ASSIGNEES,
+      attachments: (request.beforePhotos || []).map((url, idx) => ({
+        name: `Before Photo ${idx + 1}`,
+        url,
+      })),
+      remarks: `Automated maintenance task for request #${request._id.toString()}`,
+      relatedMaintenanceRequest: request._id,
+      createdBy: actorId,
+      isOverdue: deadline < new Date(),
+    });
+
+    const savedTask = await newTask.save();
+    request.linkedTask = savedTask._id as any;
+
+    await this.assigneeModel.create({
+      task: savedTask._id,
+      employee: request.assignedToEmployee,
+      status: initialStatus,
+      progress: initialProgress,
+      startedAt: initialStatus === TaskStatus.IN_PROGRESS ? new Date() : undefined,
+      completedAt: initialStatus === TaskStatus.COMPLETED ? new Date() : undefined,
+    });
+
+    try {
+      await this.auditLogModel.create({
+        task: savedTask._id,
+        actor: actorId,
+        targetEmployee: request.assignedToEmployee,
+        eventType: TaskEventType.TASK_CREATED,
+        newState: { status: initialStatus, deadline },
+        comment: `Task created from Maintenance work order: ${request.issue}`,
+        timestamp: new Date(),
+      });
+    } catch (e) {
+      // Non-blocking audit failure
+    }
+
+    return savedTask;
+  }
 
   private isManagerOrAdmin(role?: string): boolean {
     if (!role) return false;
@@ -95,6 +281,7 @@ export class MaintenanceService {
         .find(filter)
         .populate('assignedToEmployee', 'name employeeId photo')
         .populate('assignedToVendor', 'name category')
+        .populate('linkedTask', 'title status progress priority deadline')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -146,6 +333,7 @@ export class MaintenanceService {
         .populate('reportedBy', 'name employeeId photo branch department')
         .populate('assignedToEmployee', 'name employeeId photo')
         .populate('assignedToVendor', 'name category')
+        .populate('linkedTask', 'title status progress priority deadline')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -180,6 +368,7 @@ export class MaintenanceService {
       .populate('assignedToVendor', 'name category contactPerson1')
       .populate('createdBy', 'name employeeId')
       .populate('updatedBy', 'name employeeId')
+      .populate('linkedTask', 'title status progress priority deadline')
       .lean();
 
     if (!request) {
@@ -222,6 +411,8 @@ export class MaintenanceService {
     const request = await this.requestModel.findById(id);
     if (!request) throw new NotFoundException('Maintenance request not found');
 
+    const actorId = this.getUserId(user);
+
     if (dto.assignedToType === MaintenanceAssigneeType.EMPLOYEE) {
       const emp = await this.employeeModel.findById(dto.assignedToEmployee).select('_id');
       if (!emp) throw new BadRequestException('Selected employee not found');
@@ -239,7 +430,25 @@ export class MaintenanceService {
     if (dto.deadline) request.deadline = new Date(dto.deadline);
 
     request.status = MaintenanceStatus.ASSIGNED;
-    request.updatedBy = this.getUserId(user) as any;
+    request.updatedBy = actorId as any;
+
+    if (dto.assignedToType === MaintenanceAssigneeType.EMPLOYEE) {
+      await this.syncTaskForMaintenance(request, actorId);
+    } else if (request.linkedTask) {
+      // Reassigned to vendor: cancel the linked task
+      try {
+        await this.taskModel.findByIdAndUpdate(request.linkedTask, {
+          status: TaskStatus.CANCELLED,
+          cancellationReason: 'Reassigned to external vendor',
+          cancelledAt: new Date(),
+        });
+        await this.assigneeModel.updateMany(
+          { task: request.linkedTask },
+          { status: TaskStatus.CANCELLED, lastUpdateAt: new Date() },
+        );
+      } catch (e) {}
+    }
+
     await request.save();
 
     return this.findById(id, user);
@@ -273,6 +482,21 @@ export class MaintenanceService {
     request.updatedBy = userId as any;
     await request.save();
 
+    // Sync to linked task if present
+    if (request.linkedTask) {
+      try {
+        const linkedTask = await this.taskModel.findById(request.linkedTask);
+        if (linkedTask && linkedTask.status === TaskStatus.PENDING) {
+          linkedTask.status = TaskStatus.IN_PROGRESS;
+          await linkedTask.save();
+          await this.assigneeModel.updateMany(
+            { task: request.linkedTask, status: TaskStatus.PENDING },
+            { status: TaskStatus.IN_PROGRESS, startedAt: new Date(), lastUpdateAt: new Date() },
+          );
+        }
+      } catch (e) {}
+    }
+
     return this.findById(id, user);
   }
 
@@ -284,6 +508,10 @@ export class MaintenanceService {
 
     const request = await this.requestModel.findById(id);
     if (!request) throw new NotFoundException('Maintenance request not found');
+
+    if (!dto.afterPhotos || dto.afterPhotos.length === 0) {
+      throw new BadRequestException('At least one after photo is required to complete maintenance work');
+    }
 
     const userId = this.getUserId(user);
 
@@ -307,6 +535,38 @@ export class MaintenanceService {
     request.updatedBy = userId as any;
     await request.save();
 
+    // Sync to linked task: mark completed
+    if (request.linkedTask) {
+      try {
+        const linkedTask = await this.taskModel.findById(request.linkedTask);
+        if (linkedTask && linkedTask.status !== TaskStatus.COMPLETED) {
+          linkedTask.status = TaskStatus.COMPLETED;
+          linkedTask.completedAt = new Date();
+          linkedTask.progress = 100;
+          await linkedTask.save();
+
+          await this.assigneeModel.updateMany(
+            { task: request.linkedTask },
+            {
+              status: TaskStatus.COMPLETED,
+              progress: 100,
+              completedAt: new Date(),
+              lastUpdateAt: new Date(),
+            },
+          );
+
+          await this.auditLogModel.create({
+            task: linkedTask._id,
+            actor: userId,
+            eventType: TaskEventType.TASK_COMPLETED,
+            newState: { status: TaskStatus.COMPLETED },
+            comment: dto.update?.trim() || 'Maintenance work completed and verified',
+            timestamp: new Date(),
+          });
+        }
+      } catch (e) {}
+    }
+
     return this.findById(id, user);
   }
 
@@ -324,6 +584,18 @@ export class MaintenanceService {
     request.updatedBy = this.getUserId(user) as any;
     await request.save();
 
+    if (request.linkedTask) {
+      try {
+        await this.taskModel.findByIdAndUpdate(request.linkedTask, {
+          status: TaskStatus.REJECTED,
+        });
+        await this.assigneeModel.updateMany(
+          { task: request.linkedTask },
+          { status: TaskStatus.REJECTED, rejectionReason: dto.reason.trim(), lastUpdateAt: new Date() },
+        );
+      } catch (e) {}
+    }
+
     return this.findById(id, user);
   }
 
@@ -340,6 +612,20 @@ export class MaintenanceService {
     request.cancellationReason = dto.reason.trim();
     request.updatedBy = this.getUserId(user) as any;
     await request.save();
+
+    if (request.linkedTask) {
+      try {
+        await this.taskModel.findByIdAndUpdate(request.linkedTask, {
+          status: TaskStatus.CANCELLED,
+          cancellationReason: dto.reason.trim(),
+          cancelledAt: new Date(),
+        });
+        await this.assigneeModel.updateMany(
+          { task: request.linkedTask },
+          { status: TaskStatus.CANCELLED, lastUpdateAt: new Date() },
+        );
+      } catch (e) {}
+    }
 
     return this.findById(id, user);
   }

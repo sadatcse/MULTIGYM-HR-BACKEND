@@ -130,6 +130,29 @@ export class CreateEmployeeDto {
 
   @IsOptional()
   @IsString()
+  dutyInTime?: string;
+
+  @IsOptional()
+  @IsString()
+  dutyOutTime?: string;
+
+  @IsOptional()
+  @IsArray()
+  branchSchedules?: Array<{
+    branch: string;
+    shift?: string;
+    workSchedule?: string;
+    inTime?: string;
+    outTime?: string;
+    days?: string[];
+    notes?: string;
+  }>;
+
+  @IsOptional()
+  weeklyRoster?: any;
+
+  @IsOptional()
+  @IsString()
   role?: string;
 
   @IsOptional()

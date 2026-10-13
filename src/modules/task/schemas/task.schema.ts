@@ -240,6 +240,9 @@ export class Task {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Notice' })
   relatedNotice?: Notice;
 
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'MaintenanceRequest' })
+  relatedMaintenanceRequest?: any;
+
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Employee' })
   relatedEmployee?: Employee;
 

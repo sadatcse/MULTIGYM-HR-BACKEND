@@ -7,6 +7,8 @@ import { TaskUpdate, TaskUpdateSchema } from './schemas/task-update.schema';
 import { TaskReminder, TaskReminderSchema } from './schemas/task-reminder.schema';
 import { TaskCategory, TaskCategorySchema } from './schemas/task-category.schema';
 import { Employee, EmployeeSchema } from '../user/schemas/employee.schema';
+import { MaintenanceRequest, MaintenanceRequestSchema } from '../maintenance/schemas/maintenance-request.schema';
+import { MaintenanceWorkUpdate, MaintenanceWorkUpdateSchema } from '../maintenance/schemas/maintenance-work-update.schema';
 import { TaskService } from './task.service';
 import { TaskReminderService } from './task-reminder.service';
 import { TaskController } from './task.controller';
@@ -23,6 +25,8 @@ import { RolePermissionModule } from '../role-permission/role-permission.module'
       { name: TaskReminder.name, schema: TaskReminderSchema },
       { name: TaskCategory.name, schema: TaskCategorySchema },
       { name: Employee.name, schema: EmployeeSchema },
+      { name: MaintenanceRequest.name, schema: MaintenanceRequestSchema },
+      { name: MaintenanceWorkUpdate.name, schema: MaintenanceWorkUpdateSchema },
     ]),
     ChatModule,
     RolePermissionModule,

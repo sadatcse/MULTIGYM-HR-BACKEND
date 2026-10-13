@@ -118,6 +118,39 @@ export class Employee {
   @Prop()
   workSchedule?: string;
 
+  @Prop({ trim: true, default: '' })
+  dutyInTime?: string;
+
+  @Prop({ trim: true, default: '' })
+  dutyOutTime?: string;
+
+  @Prop({
+    type: [
+      {
+        branch: { type: String, required: true },
+        shift: { type: String, default: '' },
+        workSchedule: { type: String, default: '' },
+        inTime: { type: String, default: '' },
+        outTime: { type: String, default: '' },
+        days: { type: [String], default: [] },
+        notes: { type: String, default: '' },
+      },
+    ],
+    default: [],
+  })
+  branchSchedules?: Array<{
+    branch: string;
+    shift?: string;
+    workSchedule?: string;
+    inTime?: string;
+    outTime?: string;
+    days?: string[];
+    notes?: string;
+  }>;
+
+  @Prop({ type: Object, default: null })
+  weeklyRoster?: any;
+
   @Prop({ default: 'user' })
   role: string;
 

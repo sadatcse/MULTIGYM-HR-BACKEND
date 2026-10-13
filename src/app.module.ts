@@ -44,6 +44,7 @@ import { AccountabilityModule } from './modules/accountability/accountability.mo
 import { ManagementPersonModule } from './modules/management-person/management-person.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { CronModule } from './modules/cron/cron.module';
+import { HrLetterModule } from './modules/hr-letter/hr-letter.module';
 
 @Module({
   imports: [
@@ -97,6 +98,7 @@ import { CronModule } from './modules/cron/cron.module';
     ManagementPersonModule,
     MaintenanceModule,
     CronModule,
+    HrLetterModule,
   ],
   controllers: [AppController],
   providers: [TransactionLoggerMiddleware],
