@@ -12,18 +12,24 @@ export class VendorContractController {
   constructor(private readonly contractService: VendorContractService) {}
 
   @Get()
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('vendor-details', 'view')
   async findAll(@Query() query: Record<string, any>) {
     const result = await this.contractService.findAll(query);
     return { statusCode: HttpStatus.OK, message: 'Contracts retrieved successfully', ...result };
   }
 
   @Get('expiring')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('vendor-details', 'view')
   async expiring(@Query('vendor') vendor?: string) {
     const data = await this.contractService.findExpiring(vendor);
     return { statusCode: HttpStatus.OK, message: 'Expiring contracts retrieved successfully', data };
   }
 
   @Get('get-id/:id')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('vendor-details', 'view')
   async findById(@Param('id') id: string) {
     const data = await this.contractService.findById(id);
     return { statusCode: HttpStatus.OK, message: 'Contract retrieved successfully', data };

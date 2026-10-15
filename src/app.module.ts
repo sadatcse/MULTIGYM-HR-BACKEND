@@ -15,6 +15,7 @@ import {
   TransactionLogSchema,
 } from './modules/transaction-log/schemas/transaction-log.schema';
 import { TransactionLoggerMiddleware } from './common/middleware/transaction-logger.middleware';
+import { sanitizeRequest } from './common/helpers/sanitize.helper';
 import { RolePermissionModule } from './modules/role-permission/role-permission.module';
 import { DepartmentModule } from './modules/department/department.module';
 import { RoleModule } from './modules/role/role.module';
@@ -45,6 +46,19 @@ import { ManagementPersonModule } from './modules/management-person/management-p
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { CronModule } from './modules/cron/cron.module';
 import { HrLetterModule } from './modules/hr-letter/hr-letter.module';
+
+// HR operations modules: config/scoping, career history, attendance &
+// devices, duty roster, leave workflow, payroll, requisitions, discipline
+// and the combined HR dashboard.
+import { HrConfigModule } from './modules/hr-config/hr-config.module';
+import { EmployeeHistoryModule } from './modules/employee-history/employee-history.module';
+import { RosterModule } from './modules/roster/roster.module';
+import { AttendanceModule } from './modules/attendance/attendance.module';
+import { LeaveModule } from './modules/leave/leave.module';
+import { PayrollModule } from './modules/payroll/payroll.module';
+import { RequisitionModule } from './modules/requisition/requisition.module';
+import { DisciplineModule } from './modules/discipline/discipline.module';
+import { HrDashboardModule } from './modules/hr-dashboard/hr-dashboard.module';
 
 @Module({
   imports: [
@@ -99,6 +113,15 @@ import { HrLetterModule } from './modules/hr-letter/hr-letter.module';
     MaintenanceModule,
     CronModule,
     HrLetterModule,
+    HrConfigModule,
+    EmployeeHistoryModule,
+    RosterModule,
+    AttendanceModule,
+    LeaveModule,
+    PayrollModule,
+    RequisitionModule,
+    DisciplineModule,
+    HrDashboardModule,
   ],
   controllers: [AppController],
   providers: [TransactionLoggerMiddleware],
@@ -113,6 +136,6 @@ export class AppModule implements NestModule, OnModuleInit {
   }
 
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(TransactionLoggerMiddleware).forRoutes('*');
+    consumer.apply(sanitizeRequest, TransactionLoggerMiddleware).forRoutes('*');
   }
 }

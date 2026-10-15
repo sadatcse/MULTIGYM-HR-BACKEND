@@ -2,6 +2,7 @@ import { Body, Controller, InternalServerErrorException, Post, UseGuards } from 
 import { EmailService } from './email.service';
 import { SendEmailDto } from './dto/send-email.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RequireScope, ScopeGuard } from '../../common/guards/scope.guard';
 
 // Ported from controllers/emailController.js. Unused in the original app (the route
 // was never mounted anywhere) and unused here — EmailModule is not imported by AppModule.
@@ -12,6 +13,8 @@ export class EmailController {
   constructor(private readonly emailService: EmailService) {}
 
   @Post('test')
+  @UseGuards(ScopeGuard)
+  @RequireScope('superadmin')
   async sendTestEmail(@Body() dto: SendEmailDto) {
     try {
       const result = await this.emailService.sendEmail(dto.to, dto.subject, dto.body);

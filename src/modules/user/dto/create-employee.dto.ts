@@ -1,5 +1,27 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { IsArray, IsEmail, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+
+export class EmployeeDocumentDto {
+  @IsString()
+  @IsNotEmpty()
+  title: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  url: string;
+
+  @IsOptional()
+  @IsString()
+  fileName?: string;
+
+  @IsOptional()
+  @IsString()
+  uploadedAt?: string;
+}
 
 export class AddressDto {
   @IsOptional()
@@ -113,7 +135,7 @@ export class CreateEmployeeDto {
   joiningDate?: string;
 
   @IsOptional()
-  @IsIn(['active', 'probation', 'resigned', 'terminated', 'inactive'])
+  @IsIn(['active', 'probation', 'suspended', 'resigned', 'terminated', 'inactive'])
   status?: string;
 
   @IsArray()
@@ -162,4 +184,37 @@ export class CreateEmployeeDto {
   @IsOptional()
   @IsString()
   lastWorkingDate?: string;
+
+  @IsOptional()
+  @IsString()
+  reportingAuthority?: string;
+
+  @IsOptional()
+  @IsString()
+  reportingAuthorityName?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  basicSalary?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  grossSalary?: number;
+
+  @IsOptional()
+  @IsString()
+  deviceUserId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EmployeeDocumentDto)
+  documents?: EmployeeDocumentDto[];
+
+  // Set by HR when an edit should NOT be auto-recorded in employee history
+  // (e.g. correcting a typo in the designation rather than a real promotion).
+  @IsOptional()
+  skipHistory?: boolean;
 }

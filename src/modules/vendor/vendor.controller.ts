@@ -12,30 +12,40 @@ export class VendorController {
   constructor(private readonly vendorService: VendorService) {}
 
   @Get()
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('vendors', 'view')
   async findAll(@Query() query: Record<string, any>) {
     const result = await this.vendorService.findAll(query);
     return { statusCode: HttpStatus.OK, message: 'Vendors retrieved successfully', ...result };
   }
 
   @Get('dashboard-stats')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('vendors', 'view')
   async dashboardStats() {
     const data = await this.vendorService.getDashboardStats();
     return { statusCode: HttpStatus.OK, message: 'Vendor dashboard stats retrieved successfully', data };
   }
 
   @Get('alerts')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('vendors', 'view')
   async alerts() {
     const data = await this.vendorService.getAlerts();
     return { statusCode: HttpStatus.OK, message: 'Vendor alerts retrieved successfully', data };
   }
 
   @Get('get-id/:id')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('vendor-details', 'view')
   async findById(@Param('id') id: string) {
     const data = await this.vendorService.findById(id);
     return { statusCode: HttpStatus.OK, message: 'Vendor retrieved successfully', data };
   }
 
   @Get(':id/full-history')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('vendor-details', 'view')
   async fullHistory(@Param('id') id: string) {
     const data = await this.vendorService.getFullHistory(id);
     return { statusCode: HttpStatus.OK, message: 'Vendor full history retrieved successfully', data };

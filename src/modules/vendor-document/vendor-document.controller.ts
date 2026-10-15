@@ -11,6 +11,8 @@ export class VendorDocumentController {
   constructor(private readonly vendorDocumentService: VendorDocumentService) {}
 
   @Get()
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('vendor-details', 'view')
   async findAll(@Query() query: Record<string, any>) {
     const result = await this.vendorDocumentService.findAll(query);
     return { statusCode: HttpStatus.OK, message: 'Documents retrieved successfully', ...result };

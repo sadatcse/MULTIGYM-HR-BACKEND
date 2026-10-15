@@ -1,6 +1,8 @@
 import { Controller, Get, Headers, UnauthorizedException } from '@nestjs/common';
 import { TaskReminderService } from '../task/task-reminder.service';
 import { UnifiedReminderService } from '../accountability/unified-reminder.service';
+import { AttendanceService } from '../attendance/attendance.service';
+import { addDays, todayStr } from '../../common/helpers/hr-date.helper';
 
 // Vercel's free (Hobby) plan only allows cron jobs to fire once per day, so
 // this is a single consolidated endpoint covering both reminder engines
@@ -18,6 +20,7 @@ export class CronController {
   constructor(
     private readonly taskReminderService: TaskReminderService,
     private readonly unifiedReminderService: UnifiedReminderService,
+    private readonly attendanceService: AttendanceService,
   ) {}
 
   // Vercel Cron Jobs always trigger via a GET request.
@@ -33,6 +36,12 @@ export class CronController {
       this.unifiedReminderService.evaluateAllCommunications(),
     ]);
 
-    return { success: true, taskStats, accountabilityResult };
+    // Close out yesterday's attendance: marks absentees, missing punches
+    // and holiday/weekend rows for everyone who never punched.
+    const attendance = await this.attendanceService
+      .processDate(addDays(todayStr(), -1))
+      .catch((e) => ({ error: e?.message || 'attendance processing failed' }));
+
+    return { success: true, taskStats, accountabilityResult, attendance };
   }
 }

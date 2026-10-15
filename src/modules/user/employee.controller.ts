@@ -24,12 +24,14 @@ import { ChangePasswordEmployeeDto } from './dto/change-password-employee.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
+import { HrAccessService } from '../hr-config/hr-access.service';
 
 @Controller('employee')
 export class EmployeeController {
   constructor(
     private readonly employeeService: EmployeeService,
     private readonly jwtService: JwtService,
+    private readonly access: HrAccessService,
   ) {}
 
   @Post('login')
@@ -89,37 +91,62 @@ export class EmployeeController {
     return this.employeeService.changePassword(employeeId, dto);
   }
 
+  // Scoped directory: management sees everyone, branch in-charges their own
+  // branch(es), employees only themselves.
   @Get()
   @UseGuards(JwtAuthGuard)
-  findAll(@Query() query: Record<string, any>) {
-    return this.employeeService.findAll(query);
+  async findAll(@Query() query: Record<string, any>, @Req() req: Request) {
+    const actor = await this.access.getActor((req as any).user);
+    return this.employeeService.findAll(query, actor);
+  }
+
+  // Lightweight colleague list (name, ID, designation, branch, photo) for
+  // pickers and chat — never includes personal or salary fields.
+  @Get('directory')
+  @UseGuards(JwtAuthGuard)
+  directory(@Query('includeInactive') includeInactive?: string) {
+    return this.employeeService.directory(includeInactive === 'true');
+  }
+
+  // Own profile for the signed-in employee (mobile app / profile page).
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  me(@Req() req: Request) {
+    return this.employeeService.findById((req as any).user?.id);
   }
 
   @Get('get-id/:id')
   @UseGuards(JwtAuthGuard)
-  findById(@Param('id') id: string) {
-    return this.employeeService.findById(id);
+  async findById(@Param('id') id: string, @Req() req: Request) {
+    const actor = await this.access.getActor((req as any).user);
+    return this.employeeService.findByIdFor(id, actor);
   }
 
   @Post('post')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermission('employee', 'add')
-  create(@Body() dto: CreateEmployeeDto) {
-    return this.employeeService.create(dto);
+  async create(@Body() dto: CreateEmployeeDto, @Req() req: Request) {
+    const actor = await this.access.getActor((req as any).user);
+    await this.employeeService.assertCanWrite(actor, null, dto);
+    return this.employeeService.create(dto, { id: actor.id, name: actor.name, role: actor.role });
   }
 
   @Delete('delete/:id')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermission('employee', 'delete')
-  remove(@Param('id') id: string) {
+  async remove(@Param('id') id: string, @Req() req: Request) {
+    const actor = await this.access.getActor((req as any).user);
+    await this.employeeService.assertCanDelete(actor, id);
     return this.employeeService.remove(id);
   }
 
   @Put('update/:id')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermission('employee', 'edit')
-  update(@Param('id') id: string, @Body() dto: UpdateEmployeeDto) {
-    return this.employeeService.update(id, dto);
+  async update(@Param('id') id: string, @Body() dto: UpdateEmployeeDto, @Req() req: Request) {
+    const actor = await this.access.getActor((req as any).user);
+    await this.employeeService.assertCanWrite(actor, id, dto);
+    return this.employeeService.update(id, dto, { id: actor.id, name: actor.name, role: actor.role });
   }
 }
 

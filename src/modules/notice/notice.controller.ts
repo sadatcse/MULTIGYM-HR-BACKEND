@@ -52,6 +52,8 @@ export class NoticeController {
 
   // Admin: Get Global Dashboard KPI Stats & Stream
   @Get('admin/dashboard')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('notices', 'view')
   async getAdminDashboardStats() {
     const data = await this.noticeService.getAdminDashboardStats();
     return { success: true, data };
@@ -59,6 +61,8 @@ export class NoticeController {
 
   // Admin: Get Notice List
   @Get('admin/list')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('notices', 'view')
   async getAllNoticesAdmin(@Query() query: any) {
     const data = await this.noticeService.getAllNoticesAdmin(query);
     return { success: true, data };
@@ -93,6 +97,8 @@ export class NoticeController {
 
   // Admin: Notice Monitoring & Recipient Matrix
   @Get('admin/:id/monitor')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('notices', 'view')
   async getNoticeMonitoring(
     @Param('id') id: string,
     @Query('search') search?: string,

@@ -10,6 +10,7 @@ import {
   GlobalSearchQueryDto,
   ReportQueryDto,
 } from './dto/accountability-query.dto';
+import { RequireScope, ScopeGuard } from '../../common/guards/scope.guard';
 
 @Controller('accountability')
 @UseGuards(JwtAuthGuard)
@@ -72,6 +73,8 @@ export class AccountabilityController {
 
   // 8. Manual trigger for reminder & overdue evaluation
   @Post('reminders/process')
+  @UseGuards(ScopeGuard)
+  @RequireScope('all')
   async processReminders() {
     const result = await this.reminderService.evaluateAllCommunications();
     return {

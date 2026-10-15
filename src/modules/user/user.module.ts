@@ -4,11 +4,13 @@ import { Employee, EmployeeSchema } from './schemas/employee.schema';
 import { EmployeeService, UserService } from './employee.service';
 import { EmployeeController, UserController } from './employee.controller';
 import { UploadModule } from '../upload/upload.module';
+import { EmployeeHistoryModule } from '../employee-history/employee-history.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: Employee.name, schema: EmployeeSchema }]),
     UploadModule,
+    EmployeeHistoryModule,
   ],
   controllers: [EmployeeController, UserController],
   providers: [EmployeeService, UserService],

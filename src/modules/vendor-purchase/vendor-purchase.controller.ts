@@ -13,24 +13,32 @@ export class VendorPurchaseController {
   constructor(private readonly purchaseService: VendorPurchaseService) {}
 
   @Get()
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('vendor-details', 'view')
   async findAll(@Query() query: Record<string, any>) {
     const result = await this.purchaseService.findAll(query);
     return { statusCode: HttpStatus.OK, message: 'Purchases retrieved successfully', ...result };
   }
 
   @Get('expiring-warranties')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('vendor-details', 'view')
   async expiringWarranties(@Query('vendor') vendor?: string) {
     const data = await this.purchaseService.findExpiringWarranties(vendor);
     return { statusCode: HttpStatus.OK, message: 'Expiring warranties retrieved successfully', data };
   }
 
   @Get('pending-payments')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('vendor-details', 'view')
   async pendingPayments(@Query('vendor') vendor?: string) {
     const data = await this.purchaseService.findPendingPayments(vendor);
     return { statusCode: HttpStatus.OK, message: 'Pending payments retrieved successfully', data };
   }
 
   @Get('get-id/:id')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('vendor-details', 'view')
   async findById(@Param('id') id: string) {
     const data = await this.purchaseService.findById(id);
     return { statusCode: HttpStatus.OK, message: 'Purchase record retrieved successfully', data };

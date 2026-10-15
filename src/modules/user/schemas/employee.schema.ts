@@ -100,7 +100,7 @@ export class Employee {
   joiningDate?: string;
 
   @Prop({
-    enum: ['active', 'probation', 'resigned', 'terminated', 'inactive'],
+    enum: ['active', 'probation', 'suspended', 'resigned', 'terminated', 'inactive'],
     default: 'active',
   })
   status: string;
@@ -160,10 +160,48 @@ export class Employee {
   @Prop()
   lastWorkingDate?: string;
 
+  // Line manager this employee reports to (Employee _id) plus a name
+  // snapshot so lists don't need a populate.
+  @Prop({ trim: true, default: '' })
+  reportingAuthority?: string;
+
+  @Prop({ trim: true, default: '' })
+  reportingAuthorityName?: string;
+
+  // Headline salary figures shown on the profile. The detailed breakdown
+  // (allowances, fixed deductions) lives in the payroll salary structure,
+  // which keeps these two in sync whenever it is saved.
+  @Prop({ type: Number, default: 0 })
+  basicSalary?: number;
+
+  @Prop({ type: Number, default: 0 })
+  grossSalary?: number;
+
+  // User ID / PIN enrolled on the ZKTeco / biometric device.
+  @Prop({ trim: true, index: true, sparse: true })
+  deviceUserId?: string;
+
+  @Prop({
+    type: [
+      {
+        title: { type: String, required: true },
+        category: { type: String, default: 'other' },
+        url: { type: String, required: true },
+        fileName: { type: String, default: '' },
+        uploadedAt: { type: String, default: '' },
+      },
+    ],
+    default: [],
+  })
+  documents?: Array<{ title: string; category?: string; url: string; fileName?: string; uploadedAt?: string }>;
+
   comparePassword: (enteredPassword: string) => Promise<boolean>;
 }
 
 export const EmployeeSchema = SchemaFactory.createForClass(Employee);
+EmployeeSchema.index({ status: 1 });
+EmployeeSchema.index({ branches: 1, status: 1 });
+EmployeeSchema.index({ name: 1 });
 
 // Hash password before saving if password is supplied & modified
 EmployeeSchema.pre('save', async function (next) {

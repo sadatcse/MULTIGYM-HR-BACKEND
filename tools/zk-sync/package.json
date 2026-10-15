@@ -1,0 +1,14 @@
+{
+  "name": "zk-sync",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pulls ZKTeco attendance logs over LAN and pushes them to the HR backend",
+  "main": "index.js",
+  "scripts": {
+    "sync": "node index.js",
+    "watch": "node index.js --watch"
+  },
+  "dependencies": {
+    "node-zklib": "^1.3.0"
+  }
+}

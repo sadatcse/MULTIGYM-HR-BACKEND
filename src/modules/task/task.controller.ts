@@ -29,6 +29,7 @@ import {
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
+import { RequireScope, ScopeGuard } from '../../common/guards/scope.guard';
 
 @Controller('task')
 @UseGuards(JwtAuthGuard)
@@ -118,6 +119,8 @@ export class TaskController {
 
   // 8. Trigger Reminders / Overdue Scan On-Demand
   @Post('reminders/process')
+  @UseGuards(ScopeGuard)
+  @RequireScope('all')
   async processReminders() {
     const stats = await this.reminderService.evaluateAllTasks();
     return { success: true, message: 'Reminder scan completed', data: stats };

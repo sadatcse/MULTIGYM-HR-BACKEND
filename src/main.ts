@@ -1,7 +1,8 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { ValidationPipe } from '@nestjs/common';
+import { RequestMethod, ValidationPipe } from '@nestjs/common';
+import { text } from 'express';
 import { join } from 'path';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -35,6 +36,17 @@ export async function createApp() {
     }),
   );
 
+  // Brute-force protection for sign-in: 20 attempts per 15 minutes per IP.
+  const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    skipSuccessfulRequests: true,
+    legacyHeaders: false,
+    message: { statusCode: 429, message: 'Too many sign-in attempts. Please wait 15 minutes and try again.' },
+  });
+  app.use(['/api/employee/login', '/api/user/login'], loginLimiter);
+
   // Allowed cross-origin requests for web and mobile clients
   // CORS configuration
   const allowedOrigins = (
@@ -47,22 +59,41 @@ export async function createApp() {
     .map((url) => url.trim().replace(/\/$/, ''))
     .filter(Boolean);
 
+  // Outside production, any http://localhost / 127.0.0.1 port is allowed too
+  // (Next dev server, Expo web preview on :8081, etc.).
+  const isDev = (process.env.NODE_ENV || '').trim() !== 'production';
+  const isLocalDevOrigin = (o: string) => /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(o);
+
   app.enableCors({
     origin: (origin, callback) => {
       const normalizedOrigin = origin?.endsWith('/') ? origin.slice(0, -1) : origin;
-      if (!origin || allowedOrigins.includes(normalizedOrigin)) {
+      if (!origin || allowedOrigins.includes(normalizedOrigin) || (isDev && isLocalDevOrigin(normalizedOrigin))) {
         callback(null, true);
       } else {
-        callback(new Error('Not allowed by CORS'));
+        // Refuse quietly (no CORS headers) instead of throwing a 500.
+        callback(null, false);
       }
     },
     credentials: true,
   });
 
+  // ZKTeco ADMS devices post attendance logs as tab-separated plain text
+  // (often with a misleading content-type), so the /iclock routes read the
+  // raw body as text before Nest's JSON/urlencoded parsers see it.
+  app.use('/iclock', text({ type: '*/*', limit: '5mb' }));
+
   // Static files
   app.useStaticAssets(join(__dirname, '..', 'public'));
 
-  app.setGlobalPrefix('api', { exclude: ['/'] });
+  // Device firmware hardcodes /iclock/*, so those stay outside /api.
+  app.setGlobalPrefix('api', {
+    exclude: [
+      '/',
+      { path: 'iclock/cdata', method: RequestMethod.ALL },
+      { path: 'iclock/getrequest', method: RequestMethod.ALL },
+      { path: 'iclock/devicecmd', method: RequestMethod.ALL },
+    ],
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({

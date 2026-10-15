@@ -14,18 +14,24 @@ export class VendorServiceRecordController {
   constructor(private readonly serviceRecordService: VendorServiceRecordService) {}
 
   @Get()
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('vendor-details', 'view')
   async findAll(@Query() query: Record<string, any>) {
     const result = await this.serviceRecordService.findAll(query);
     return { statusCode: HttpStatus.OK, message: 'Service records retrieved successfully', ...result };
   }
 
   @Get('upcoming')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('vendor-details', 'view')
   async upcoming(@Query('days') days?: string, @Query('vendor') vendor?: string) {
     const data = await this.serviceRecordService.findUpcoming(days ? parseInt(days, 10) : 30, vendor);
     return { statusCode: HttpStatus.OK, message: 'Upcoming services retrieved successfully', data };
   }
 
   @Get('get-id/:id')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('vendor-details', 'view')
   async findById(@Param('id') id: string) {
     const data = await this.serviceRecordService.findById(id);
     return { statusCode: HttpStatus.OK, message: 'Service record retrieved successfully', data };

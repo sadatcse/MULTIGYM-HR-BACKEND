@@ -12,6 +12,8 @@ export class VendorPerformanceController {
   constructor(private readonly performanceService: VendorPerformanceService) {}
 
   @Get()
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('vendor-details', 'view')
   async findAll(@Query() query: Record<string, any>) {
     const result = await this.performanceService.findAll(query);
     return { statusCode: HttpStatus.OK, message: 'Performance reviews retrieved successfully', ...result };
