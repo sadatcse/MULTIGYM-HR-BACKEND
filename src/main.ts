@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { RequestMethod, ValidationPipe } from '@nestjs/common';
-import { text } from 'express';
+import { Request, text } from 'express';
 import { join } from 'path';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -17,6 +17,14 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 export async function createApp() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
+  // Hosted behind a proxy (DigitalOcean App Platform / Vercel): trust the hop
+  // in front so Express reads X-Forwarded-* instead of rejecting them.
+  app.set('trust proxy', 1);
+  // Rate limits count per visitor. DigitalOcean's edge puts the visitor's real
+  // address in `do-connecting-ip` (the X-Forwarded-For chain can hold extra
+  // proxy hops); anywhere else req.ip is the visitor.
+  const visitorIp = (req: Request) => String(req.headers['do-connecting-ip'] || req.ip || '');
+
   // Security middleware
   app.use(
     helmet({
@@ -29,6 +37,7 @@ export async function createApp() {
   app.use(
     rateLimit({
       windowMs: 5 * 60 * 1000, // 5 minutes
+      keyGenerator: visitorIp,
       max: 5000, // Limit each IP to 5000 requests — a single dashboard page
       // easily fires dozens of requests per load (dev-mode double-effects,
       // per-tab data fetches, notification polling); 1000/5min was hit by
@@ -40,6 +49,7 @@ export async function createApp() {
   const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 20,
+    keyGenerator: visitorIp,
     standardHeaders: true,
     skipSuccessfulRequests: true,
     legacyHeaders: false,
@@ -52,6 +62,7 @@ export async function createApp() {
   const resetLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 10,
+    keyGenerator: visitorIp,
     standardHeaders: true,
     legacyHeaders: false,
     message: { statusCode: 429, message: 'Too many password reset attempts. Please wait 15 minutes and try again.' },
