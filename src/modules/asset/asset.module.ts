@@ -4,6 +4,8 @@ import { AssetService } from './asset.service';
 import { AssetController } from './asset.controller';
 import { Asset, AssetSchema } from './schemas/asset.schema';
 import { AssetAssignment, AssetAssignmentSchema } from '../asset-assignment/schemas/asset-assignment.schema';
+import { AssetLocation, AssetLocationSchema } from '../asset-location/schemas/asset-location.schema';
+import { Employee, EmployeeSchema } from '../user/schemas/employee.schema';
 
 import { AssetTransactionModule } from '../asset-transaction/asset-transaction.module';
 
@@ -12,6 +14,8 @@ import { AssetTransactionModule } from '../asset-transaction/asset-transaction.m
     MongooseModule.forFeature([
       { name: Asset.name, schema: AssetSchema },
       { name: AssetAssignment.name, schema: AssetAssignmentSchema },
+      { name: AssetLocation.name, schema: AssetLocationSchema },
+      { name: Employee.name, schema: EmployeeSchema },
     ]),
     AssetTransactionModule,
   ],

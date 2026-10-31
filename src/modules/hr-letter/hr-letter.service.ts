@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -7,74 +8,149 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import {
-  HrLetterTemplate,
-  HrLetterTemplateDocument,
-  HR_LETTER_TYPES,
-} from './schemas/hr-letter-template.schema';
-import {
-  EmployeeHrLetter,
-  EmployeeHrLetterDocument,
-} from './schemas/employee-hr-letter.schema';
-import {
-  HrLetterAuditLog,
-  HrLetterAuditLogDocument,
-} from './schemas/hr-letter-audit-log.schema';
+import { randomBytes } from 'crypto';
+import { HrLetterTemplate, HrLetterTemplateDocument } from './schemas/hr-letter-template.schema';
+import { EmployeeHrLetter, EmployeeHrLetterDocument } from './schemas/employee-hr-letter.schema';
+import { HrLetterAuditLog, HrLetterAuditLogDocument } from './schemas/hr-letter-audit-log.schema';
+import { HrLetterCounter, HrLetterCounterDocument } from './schemas/hr-letter-counter.schema';
 import { Employee, EmployeeDocument } from '../user/schemas/employee.schema';
 import { Setting, SettingDocument } from '../setting/schemas/setting.schema';
 import { Branch, BranchDocument } from '../branch/schemas/branch.schema';
+import { Actor, HrAccessService } from '../hr-config/hr-access.service';
 import { DEFAULT_HR_LETTER_TEMPLATES } from './default-templates.data';
-import { CreateLetterDto } from './dto/create-letter.dto';
+import { CreateLetterDto, LetterSignatoriesDto, PreviewLetterDto, UpdateDraftDto } from './dto/create-letter.dto';
 import { ReissueLetterDto } from './dto/reissue-letter.dto';
 import { QueryLetterDto } from './dto/query-letter.dto';
+import { UpdateTemplateDto } from './dto/update-template.dto';
+import { fieldTypeOf, fillPlaceholders, formatBanglaDate, formatFieldValue } from './letter-format.helper';
+import { escapeRegex } from '../../common/helpers/sanitize.helper';
+
+type ReqMeta = { ip?: string; userAgent?: string };
+type Who = { id: any; name: string; role: string };
+
+// Letters that are the current, official version (not drafts, not voided,
+// not superseded by a reissue).
+const ISSUED_STATUSES = ['generated', 'issued'];
+
+// Light projection for lists — the full snapshot (clauses, signatories)
+// is only loaded when a single letter is opened.
+const LIST_FIELDS = {
+  employeeId: 1,
+  employeeCode: 1,
+  employeeName: 1,
+  employeePhoto: 1,
+  letterType: 1,
+  letterNumber: 1,
+  letterDate: 1,
+  effectiveDate: 1,
+  branch: 1,
+  department: 1,
+  designation: 1,
+  status: 1,
+  version: 1,
+  fileName: 1,
+  inputData: 1,
+  remarks: 1,
+  reissueReason: 1,
+  cancelReason: 1,
+  generatedBy: 1,
+  generatedAt: 1,
+  issuedAt: 1,
+  cancelledAt: 1,
+  createdAt: 1,
+  updatedAt: 1,
+  'contentSnapshot.letterMeta': 1,
+};
+
+// Employee self-service ("My Letters"): only official letters addressed to
+// the signed-in employee — never drafts, superseded versions, internal
+// notes, raw form input or who prepared them.
+const MY_STATUSES = ['generated', 'issued', 'cancelled'];
+const MY_LIST_FIELDS = {
+  letterType: 1,
+  letterNumber: 1,
+  letterDate: 1,
+  effectiveDate: 1,
+  status: 1,
+  version: 1,
+  fileName: 1,
+  branch: 1,
+  designation: 1,
+  issuedAt: 1,
+  cancelledAt: 1,
+  createdAt: 1,
+  'contentSnapshot.letterMeta': 1,
+};
+const MY_HIDDEN_FIELDS = { inputData: 0, remarks: 0, generatedBy: 0, updatedBy: 0, cancelledBy: 0, cancelReason: 0, reissueReason: 0, templateId: 0, parentLetterId: 0 };
+
+const SORTABLE = new Set(['createdAt', 'letterDate', 'employeeName', 'letterNumber', 'letterType', 'status']);
+
+const FALLBACK_SIGNATORIES = {
+  issuedBy: { name: 'মোঃ ফয়জুর রহমান মানিক', designation: 'Manager: Admin & HR', title: 'Senior Trainer' },
+  approvedBy: {
+    name: 'কর্নেল মোঃ বনী ইয়ামীন (অবঃ)',
+    designation: 'পরিচালক',
+    company: 'মাল্টি জিম প্রিমিয়াম ও মাল্টি জিম',
+    onBehalfOf: 'পক্ষে, ব্যবস্থাপনা পরিচালক',
+  },
+  copyTo: [
+    'ব্যবস্থাপনা পরিচালক, মাল্টি জিম প্রিমিয়াম ও মাল্টি জিম',
+    'পরিচালক, মাল্টি জিম প্রিমিয়াম ও মাল্টি জিম',
+    'ম্যানেজার এডমিন',
+    'ম্যানেজার একাউন্টস',
+  ],
+};
+
+// Stand-in employee for the template preview screen.
+const SAMPLE_EMPLOYEE: any = {
+  _id: null,
+  employeeId: 'EMP-0001',
+  name: 'মোহাম্মদ রফিকুল ইসলাম',
+  jobPosition: 'Senior Fitness Trainer',
+  department: 'Gym Operations',
+  branches: ['Dhanmondi'],
+  joiningDate: '2024-01-01',
+  mobileNumber: '+880 1711-000000',
+  nidPassport: '1234567890',
+};
+
+const today = () => new Date(Date.now() + 6 * 3600 * 1000).toISOString().slice(0, 10);
+const yearOf = (isoDate?: string) => Number(String(isoDate || today()).slice(0, 4)) || new Date().getFullYear();
+const pick = (...vals: any[]) => vals.find((v) => v !== undefined && v !== null && String(v).trim() !== '');
+
+const addressText = (a: any) =>
+  a && typeof a === 'object' ? [a.addressLine1, a.addressLine2, a.area, a.city, a.district].filter(Boolean).join(', ') : a || '';
 
 @Injectable()
 export class HrLetterService implements OnModuleInit {
   private readonly logger = new Logger(HrLetterService.name);
 
   constructor(
-    @InjectModel(HrLetterTemplate.name)
-    private readonly templateModel: Model<HrLetterTemplateDocument>,
-    @InjectModel(EmployeeHrLetter.name)
-    private readonly letterModel: Model<EmployeeHrLetterDocument>,
-    @InjectModel(HrLetterAuditLog.name)
-    private readonly auditModel: Model<HrLetterAuditLogDocument>,
-    @InjectModel(Employee.name)
-    private readonly employeeModel: Model<EmployeeDocument>,
-    @InjectModel(Setting.name)
-    private readonly settingModel: Model<SettingDocument>,
-    @InjectModel(Branch.name)
-    private readonly branchModel: Model<BranchDocument>,
+    @InjectModel(HrLetterTemplate.name) private readonly templateModel: Model<HrLetterTemplateDocument>,
+    @InjectModel(EmployeeHrLetter.name) private readonly letterModel: Model<EmployeeHrLetterDocument>,
+    @InjectModel(HrLetterAuditLog.name) private readonly auditModel: Model<HrLetterAuditLogDocument>,
+    @InjectModel(HrLetterCounter.name) private readonly counterModel: Model<HrLetterCounterDocument>,
+    @InjectModel(Employee.name) private readonly employeeModel: Model<EmployeeDocument>,
+    @InjectModel(Setting.name) private readonly settingModel: Model<SettingDocument>,
+    @InjectModel(Branch.name) private readonly branchModel: Model<BranchDocument>,
+    private readonly access: HrAccessService,
   ) {}
 
   async onModuleInit() {
     await this.seedDefaultTemplates();
+    await this.migrateIndexes();
   }
 
-  /**
-   * Seed standard 13 templates extracted from Master docx files if not present.
-   */
+  // ---------------------------------------------------------------------------
+  // Setup
+  // ---------------------------------------------------------------------------
+
   async seedDefaultTemplates() {
     try {
       for (const def of DEFAULT_HR_LETTER_TEMPLATES) {
-        const exists = await this.templateModel.findOne({
-          letterType: def.letterType,
-          isDefault: true,
-        });
+        const exists = await this.templateModel.exists({ letterType: def.letterType, isDefault: true });
         if (!exists) {
-          await this.templateModel.create({
-            letterType: def.letterType,
-            name: def.name,
-            titleBangla: def.titleBangla,
-            titleEnglish: def.titleEnglish,
-            memoPrefix: def.memoPrefix,
-            subjectTemplate: def.subjectTemplate,
-            infoFields: def.infoFields,
-            sections: def.sections,
-            hasEmployeeAcknowledgment: def.hasEmployeeAcknowledgment,
-            isDefault: true,
-            status: 'active',
-          });
+          await this.templateModel.create({ ...def, isDefault: true, status: 'active' });
           this.logger.log(`Seeded default template for HR Letter: ${def.letterType}`);
         }
       }
@@ -83,170 +159,233 @@ export class HrLetterService implements OnModuleInit {
     }
   }
 
-  /**
-   * Generates the next unique letter memo number:
-   * e.g. MGP/HR/APT/2026/0001
-   */
-  async generateNextLetterNumber(prefix: string, year: number): Promise<string> {
-    const pattern = new RegExp(`^${prefix}/${year}/(\\d+)$`);
-    const letters = await this.letterModel
-      .find({ letterNumber: pattern }, { letterNumber: 1 })
-      .lean();
-
-    let maxSeq = 0;
-    for (const item of letters) {
-      const match = item.letterNumber.match(pattern);
-      if (match && match[1]) {
-        const num = parseInt(match[1], 10);
-        if (num > maxSeq) maxSeq = num;
+  // Older databases have a unique index on letterNumber alone, which made
+  // every reissue (same number, next version) fail with a duplicate key.
+  private async migrateIndexes() {
+    try {
+      const indexes = await this.letterModel.collection.indexes();
+      const old = indexes.find((i: any) => i.unique && Object.keys(i.key || {}).join() === 'letterNumber');
+      if (old?.name) {
+        await this.letterModel.collection.dropIndex(old.name);
+        this.logger.log(`Dropped legacy unique index ${old.name} on employee_hr_letters`);
       }
+      await this.letterModel.createIndexes();
+    } catch (err) {
+      this.logger.error(`HR letter index migration failed: ${(err as Error).message}`);
     }
-
-    const nextSeq = (maxSeq + 1).toString().padStart(4, '0');
-    return `${prefix}/${year}/${nextSeq}`;
   }
 
-  /**
-   * Preview what the next letter number will be for a given letter type
-   */
-  async getNextLetterNumberPreview(letterType: string): Promise<string> {
-    const template = await this.getTemplateForType(letterType);
-    const prefix = template?.memoPrefix || `MGP/HR/${letterType.toUpperCase().slice(0, 4)}`;
-    const year = new Date().getFullYear();
-    return this.generateNextLetterNumber(prefix, year);
+  // ---------------------------------------------------------------------------
+  // Memo numbers  (e.g. MGP/HR/APT/2026/0001)
+  // ---------------------------------------------------------------------------
+
+  private async scanMaxSeq(prefix: string, year: number) {
+    const pattern = new RegExp(`^${escapeRegex(prefix)}/${year}/(\\d+)$`);
+    const rows = await this.letterModel.find({ letterNumber: pattern }, { letterNumber: 1 }).lean();
+    return rows.reduce((max, r) => Math.max(max, Number(r.letterNumber.match(pattern)?.[1]) || 0), 0);
   }
 
-  /**
-   * Get active default template for a letter type
-   */
-  async getTemplateForType(letterType: string): Promise<HrLetterTemplateDocument> {
-    let template = await this.templateModel.findOne({ letterType, isDefault: true, status: 'active' });
-    if (!template) {
-      template = await this.templateModel.findOne({ letterType, status: 'active' });
+  private format(prefix: string, year: number, seq: number) {
+    return `${prefix}/${year}/${String(seq).padStart(4, '0')}`;
+  }
+
+  async peekNextNumber(prefix: string, year: number) {
+    const counter = await this.counterModel.findOne({ key: `${prefix}/${year}` }).lean();
+    const current = counter ? counter.seq : await this.scanMaxSeq(prefix, year);
+    return this.format(prefix, year, current + 1);
+  }
+
+  private async allocateNumber(prefix: string, year: number) {
+    const key = `${prefix}/${year}`;
+    if (!(await this.counterModel.exists({ key }))) {
+      // First letter on this counter: continue after any numbers issued
+      // before counters existed. $max keeps concurrent initialisers safe.
+      const max = await this.scanMaxSeq(prefix, year);
+      await this.counterModel.updateOne({ key }, { $max: { seq: max } }, { upsert: true }).catch(() => undefined);
     }
-    if (!template) {
-      template = await this.templateModel.findOne({ letterType });
+    const doc = await this.counterModel.findOneAndUpdate({ key }, { $inc: { seq: 1 } }, { new: true, upsert: true });
+    return this.format(prefix, year, doc!.seq);
+  }
+
+  async getNextLetterNumberPreview(letterType: string, letterDate?: string) {
+    const template = await this.resolveTemplate(letterType);
+    return this.peekNextNumber(template.memoPrefix, yearOf(letterDate));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Templates
+  // ---------------------------------------------------------------------------
+
+  // Adds the effective `type` to every info field so clients can render the
+  // right input (date picker, amount, long text) without guessing.
+  private withFieldTypes<T extends { infoFields?: any[] }>(tpl: T): T {
+    if (!tpl) return tpl;
+    return { ...tpl, infoFields: (tpl.infoFields || []).map((f) => ({ ...f, type: fieldTypeOf(f) })) };
+  }
+
+  private async resolveTemplate(letterType: string, templateId?: string): Promise<any> {
+    if (templateId && Types.ObjectId.isValid(templateId)) {
+      const byId = await this.templateModel.findById(templateId).lean();
+      if (byId) return byId;
     }
-    if (!template) {
-      throw new NotFoundException(`No template found for letter type "${letterType}"`);
-    }
+    const template =
+      (await this.templateModel.findOne({ letterType, isDefault: true, status: 'active' }).lean()) ||
+      (await this.templateModel.findOne({ letterType, status: 'active' }).lean()) ||
+      (await this.templateModel.findOne({ letterType }).lean());
+    if (!template) throw new NotFoundException(`No template found for letter type "${letterType}"`);
     return template;
   }
 
-  /**
-   * List all templates
-   */
-  async getAllTemplates(): Promise<HrLetterTemplateDocument[]> {
-    return this.templateModel.find().sort({ letterType: 1, isDefault: -1 }).lean();
+  async getTemplateForType(letterType: string) {
+    return this.withFieldTypes(await this.resolveTemplate(letterType));
   }
 
-  /**
-   * Update template
-   */
-  async updateTemplate(id: string, updates: Partial<HrLetterTemplate>, user: any): Promise<HrLetterTemplateDocument> {
-    const template = await this.templateModel.findByIdAndUpdate(
-      id,
-      { ...updates, updatedBy: user?.userId || user?._id },
-      { new: true },
-    );
+  async getAllTemplates() {
+    const list = await this.templateModel.find().sort({ letterType: 1, isDefault: -1 }).lean();
+    return list.map((t) => this.withFieldTypes(t));
+  }
+
+  async updateTemplate(id: string, dto: UpdateTemplateDto, actor: Actor, meta?: ReqMeta) {
+    if (!Types.ObjectId.isValid(id)) throw new BadRequestException('Invalid template id');
+    if (dto.infoFields) {
+      const keys = dto.infoFields.map((f) => f.key);
+      if (new Set(keys).size !== keys.length) throw new BadRequestException('Two information fields use the same key');
+    }
+    const template = await this.templateModel
+      .findByIdAndUpdate(id, { $set: { ...dto, updatedBy: new Types.ObjectId(actor.id) } }, { new: true, runValidators: true })
+      .lean();
     if (!template) throw new NotFoundException('Template not found');
-    return template;
+    await this.logAction({ action: 'template_updated', performedBy: this.who(actor), metadata: { templateId: id, letterType: template.letterType, fields: Object.keys(dto) }, ...meta });
+    return this.withFieldTypes(template);
   }
 
+  // Restores a template's wording to the built-in default for its type.
+  async resetTemplate(id: string, actor: Actor, meta?: ReqMeta) {
+    const template = await this.templateModel.findById(id);
+    if (!template) throw new NotFoundException('Template not found');
+    const def = DEFAULT_HR_LETTER_TEMPLATES.find((d) => d.letterType === template.letterType);
+    if (!def) throw new BadRequestException('No built-in default exists for this letter type');
+    template.set({ ...def, defaultSignatories: FALLBACK_SIGNATORIES, updatedBy: new Types.ObjectId(actor.id) });
+    await template.save();
+    await this.logAction({ action: 'template_reset', performedBy: this.who(actor), metadata: { templateId: id, letterType: template.letterType }, ...meta });
+    return this.withFieldTypes(template.toObject());
+  }
+
+  // Sample rendering of a template (optionally with unsaved edits) for the
+  // template editor's preview.
+  async previewTemplate(id: string, overrides?: UpdateTemplateDto) {
+    const stored = await this.templateModel.findById(id).lean();
+    if (!stored) throw new NotFoundException('Template not found');
+    const template = { ...stored, ...(overrides || {}) };
+    const sampleInput: Record<string, any> = {};
+    for (const f of template.infoFields || []) {
+      if (f.source === 'employee') continue;
+      const type = fieldTypeOf(f);
+      sampleInput[f.key] = f.defaultValue || (type === 'date' ? today() : type === 'money' ? '25000' : type === 'percent' ? '10' : `[${f.labelBangla}]`);
+    }
+    return this.buildContentSnapshot(template, SAMPLE_EMPLOYEE, {
+      letterNumber: await this.peekNextNumber(template.memoPrefix, yearOf()),
+      letterDate: today(),
+      effectiveDate: today(),
+      inputData: sampleInput,
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Snapshot rendering
+  // ---------------------------------------------------------------------------
+
   /**
-   * Build immutable rendered snapshot for official letter
+   * Builds the immutable rendered snapshot stored with a letter. Past letters
+   * never change when employee, template or company details change later.
    */
   private async buildContentSnapshot(
-    template: HrLetterTemplateDocument,
-    employee: EmployeeDocument,
-    letterNumber: string,
-    letterDate: string,
-    inputData: Record<string, any> = {},
-    customSignatories?: any,
+    template: any,
+    employee: any,
+    opts: {
+      letterNumber: string;
+      letterDate: string;
+      effectiveDate?: string;
+      inputData?: Record<string, any>;
+      customSignatories?: LetterSignatoriesDto;
+    },
   ) {
-    const settings = (await this.settingModel.findOne().lean()) || ({} as any);
+    const settings: any = (await this.settingModel.findOne().lean()) || {};
+    const currency = settings.currencySymbol || '৳';
+    const inputData = opts.inputData || {};
 
-    // Primary branch
-    const branchName = inputData.branch || (employee.branches && employee.branches[0]) || '';
+    // Letterhead branch: the one chosen on the form, else the employee's
+    // primary branch (for transfers this is the branch issuing the order).
+    const branchName = pick(inputData.branch, employee.branches?.[0]) || '';
     let branchInfo: any = null;
     if (branchName) {
-      const bDoc = await this.branchModel.findOne({ name: branchName }).lean();
-      if (bDoc) {
-        branchInfo = {
-          name: bDoc.name,
-          address: bDoc.address,
-          phone: bDoc.phone,
-          website: bDoc.website,
-        };
-      }
+      const b = await this.branchModel.findOne({ name: branchName }).lean();
+      if (b) branchInfo = { name: b.name, address: b.address, phone: b.phone, website: b.website };
     }
 
-    // Replace subject variables
-    let subject = template.subjectTemplate;
-    const allVariables: Record<string, any> = {
-      employeeName: employee.name,
-      employeeId: employee.employeeId || 'EMP',
-      designation: inputData.newDesignation || inputData.designation || employee.jobPosition || '',
-      department: inputData.department || employee.department || '',
-      branch: branchName,
-      effectiveDate: inputData.effectiveDate || letterDate,
-      letterDate,
-      letterNumber,
-      companyName: settings.companyName || 'Multi Gym Premium & Multi Gym',
+    // Info table: typed + formatted values.
+    const formatted: Record<string, string> = {};
+    const infoTable = (template.infoFields || []).map((field: any) => {
+      const type = fieldTypeOf(field);
+      let raw = inputData[field.key];
+      if (raw === undefined || raw === null || raw === '') {
+        if (field.source === 'employee' && field.employeeField) raw = employee[field.employeeField];
+        if ((raw === undefined || raw === null || raw === '') && field.defaultValue) raw = field.defaultValue;
+      }
+      const value = formatFieldValue(type, raw, currency);
+      formatted[field.key] = value;
+      return { key: field.key, labelBangla: field.labelBangla, labelEnglish: field.labelEnglish, type, value: value || '—' };
+    });
+
+    const letterDateDisplay = formatBanglaDate(opts.letterDate) || opts.letterDate;
+    const effectiveDate = opts.effectiveDate || inputData.effectiveDate || opts.letterDate;
+    const effectiveDateDisplay = formatBanglaDate(effectiveDate) || effectiveDate;
+    const designation = pick(inputData.newDesignation, inputData.designation, employee.jobPosition) || '';
+    const department = pick(inputData.department, employee.department) || '';
+
+    // Placeholders available to the subject and to every clause, e.g.
+    // "{{employeeName}}", "{{newDesignation}}", "{{effectiveDate}}".
+    const vars: Record<string, any> = {
       ...inputData,
+      ...formatted,
+      employeeName: employee.name,
+      employeeId: employee.employeeId || '',
+      employeeCode: employee.employeeId || '',
+      designation,
+      department,
+      branch: branchName,
+      letterNumber: opts.letterNumber,
+      letterDate: letterDateDisplay,
+      effectiveDate: effectiveDateDisplay,
+      companyName: settings.companyName || 'Multi Gym Premium & Multi Gym',
     };
 
-    for (const [key, val] of Object.entries(allVariables)) {
-      if (typeof val === 'string' || typeof val === 'number') {
-        const regex = new RegExp(`{{\\s*${key}\\s*}}`, 'g');
-        subject = subject.replace(regex, String(val));
-      }
-    }
+    const sections = (template.sections || []).map((s: any) => ({
+      sectionNumber: s.sectionNumber,
+      titleBangla: fillPlaceholders(s.titleBangla, vars),
+      titleEnglish: s.titleEnglish,
+      introText: fillPlaceholders(s.introText, vars),
+      clauses: (s.clauses || []).map((c: string) => fillPlaceholders(c, vars)),
+    }));
 
-    // Build info table key-values
-    const infoTable: Array<{ key: string; labelBangla: string; labelEnglish?: string; value: string }> = [];
-    for (const field of template.infoFields) {
-      let value = '';
-      if (inputData[field.key] !== undefined && inputData[field.key] !== null && inputData[field.key] !== '') {
-        value = String(inputData[field.key]);
-      } else if (field.source === 'employee' && field.employeeField) {
-        const empVal = (employee as any)[field.employeeField];
-        if (Array.isArray(empVal)) {
-          value = empVal.join(', ');
-        } else if (empVal) {
-          value = String(empVal);
-        }
-      } else if (field.defaultValue) {
-        value = field.defaultValue;
-      }
-
-      infoTable.push({
-        key: field.key,
-        labelBangla: field.labelBangla,
-        labelEnglish: field.labelEnglish,
-        value: value || '—',
-      });
-    }
-
-    // Signatories
+    const custom = opts.customSignatories || {};
+    const defaults = template.defaultSignatories || {};
     const signatories = {
       issuedBy: {
-        name: customSignatories?.issuedBy?.name || template.defaultSignatories?.issuedBy?.name || 'মোঃ ফয়জুর রহমান মানিক',
-        designation: customSignatories?.issuedBy?.designation || template.defaultSignatories?.issuedBy?.designation || 'Manager: Admin & HR',
-        title: customSignatories?.issuedBy?.title || template.defaultSignatories?.issuedBy?.title || 'Senior Trainer',
+        name: pick(custom.issuedBy?.name, defaults.issuedBy?.name, FALLBACK_SIGNATORIES.issuedBy.name),
+        designation: pick(custom.issuedBy?.designation, defaults.issuedBy?.designation, FALLBACK_SIGNATORIES.issuedBy.designation),
+        title: pick(custom.issuedBy?.title, defaults.issuedBy?.title, '') || '',
       },
       approvedBy: {
-        name: customSignatories?.approvedBy?.name || template.defaultSignatories?.approvedBy?.name || 'কর্নেল মোঃ বনী ইয়ামীন (অবঃ)',
-        designation: customSignatories?.approvedBy?.designation || template.defaultSignatories?.approvedBy?.designation || 'পরিচালক',
-        company: customSignatories?.approvedBy?.company || template.defaultSignatories?.approvedBy?.company || 'মাল্টি জিম প্রিমিয়াম ও মাল্টি জিম',
-        onBehalfOf: customSignatories?.approvedBy?.onBehalfOf || template.defaultSignatories?.approvedBy?.onBehalfOf || 'পক্ষে, ব্যবস্থাপনা পরিচালক',
+        name: pick(custom.approvedBy?.name, defaults.approvedBy?.name, FALLBACK_SIGNATORIES.approvedBy.name),
+        designation: pick(custom.approvedBy?.designation, defaults.approvedBy?.designation, FALLBACK_SIGNATORIES.approvedBy.designation),
+        company: pick(custom.approvedBy?.company, defaults.approvedBy?.company, FALLBACK_SIGNATORIES.approvedBy.company),
+        onBehalfOf: pick(custom.approvedBy?.onBehalfOf, defaults.approvedBy?.onBehalfOf, FALLBACK_SIGNATORIES.approvedBy.onBehalfOf),
       },
-      copyTo: customSignatories?.copyTo || template.defaultSignatories?.copyTo || [
-        'ব্যবস্থাপনা পরিচালক, মাল্টি জিম প্রিমিয়াম ও মাল্টি জিম',
-        'পরিচালক, মাল্টি জিম প্রিমিয়াম ও মাল্টি জিম',
-        'ম্যানেজার এডমিন',
-        'ম্যানেজার একাউন্টস',
-      ],
+      // An explicit (even empty) list from the form wins over the defaults.
+      copyTo: (Array.isArray(custom.copyTo) ? custom.copyTo : defaults.copyTo?.length ? defaults.copyTo : FALLBACK_SIGNATORIES.copyTo)
+        .map((c: string) => String(c || '').trim())
+        .filter(Boolean),
     };
 
     return {
@@ -255,176 +394,249 @@ export class HrLetterService implements OnModuleInit {
         tagline: settings.companyTagline || 'Multi Gym Premium | Multi Gym | Power FiT',
         brands: 'Multi Gym Premium  |  Multi Gym  |  Power FiT',
         logo: settings.logo || '',
-        address: settings.address || 'Dhaka, Bangladesh',
-        phone: settings.phone || '+880 1700-000000',
-        email: settings.email || 'info@multigympremium.com',
-        website: settings.website || 'https://multigymhr.com',
+        address: settings.address || '',
+        phone: settings.phone || '',
+        email: settings.email || '',
+        website: settings.website || '',
       },
       branch: branchInfo,
       letterMeta: {
         letterType: template.letterType,
-        letterNumber,
-        letterDate,
+        letterNumber: opts.letterNumber,
+        letterDate: opts.letterDate,
+        letterDateDisplay,
+        effectiveDate,
+        effectiveDateDisplay,
         titleBangla: template.titleBangla,
         titleEnglish: template.titleEnglish,
-        subject,
+        subject: fillPlaceholders(template.subjectTemplate, vars),
       },
       recipient: {
         employeeId: employee.employeeId,
         name: employee.name,
         fatherOrHusbandName: inputData.fatherOrHusbandName || '',
-        designation: inputData.newDesignation || inputData.designation || employee.jobPosition,
-        department: inputData.department || employee.department,
+        designation,
+        department,
         branch: branchName,
-        joiningDate: employee.joiningDate,
+        joiningDate: formatBanglaDate(employee.joiningDate) || employee.joiningDate || '',
         phone: employee.mobileNumber,
-        presentAddress: typeof employee.presentAddress === 'object'
-          ? [employee.presentAddress?.addressLine1, employee.presentAddress?.area, employee.presentAddress?.city].filter(Boolean).join(', ')
-          : employee.presentAddress,
-        permanentAddress: typeof employee.permanentAddress === 'object'
-          ? [employee.permanentAddress?.addressLine1, employee.permanentAddress?.area, employee.permanentAddress?.city].filter(Boolean).join(', ')
-          : employee.permanentAddress,
+        presentAddress: addressText(employee.presentAddress),
+        permanentAddress: addressText(employee.permanentAddress),
         nidPassport: employee.nidPassport,
-        emergencyContact: employee.emergencyContact?.name
-          ? `${employee.emergencyContact.name} (${employee.emergencyContact.relation || 'Contact'} - ${employee.emergencyContact.mobileNumber || ''})`
-          : '',
       },
       infoTable,
-      sections: template.sections || [],
+      sections,
       signatories,
-      acknowledgementRequired: template.hasEmployeeAcknowledgment,
+      acknowledgementRequired: template.hasEmployeeAcknowledgment !== false,
     };
   }
 
-  /**
-   * Create Letter (Draft or Official Generated)
-   */
-  async createLetter(dto: CreateLetterDto, user: any, reqMeta?: { ip?: string; userAgent?: string }) {
-    const employee = await this.employeeModel.findById(dto.employeeId);
-    if (!employee) {
-      throw new NotFoundException(`Employee with ID "${dto.employeeId}" not found`);
-    }
+  // ---------------------------------------------------------------------------
+  // Letters
+  // ---------------------------------------------------------------------------
 
-    const template = dto.templateId
-      ? await this.templateModel.findById(dto.templateId)
-      : await this.getTemplateForType(dto.letterType);
+  private who(actor: Actor): Who {
+    return { id: Types.ObjectId.isValid(actor.id) ? new Types.ObjectId(actor.id) : actor.id, name: actor.name, role: actor.role };
+  }
 
-    if (!template) {
-      throw new NotFoundException(`Template for letter type "${dto.letterType}" not found`);
-    }
+  private async loadEmployeeFor(actor: Actor, employeeId: string) {
+    if (!Types.ObjectId.isValid(employeeId)) throw new BadRequestException('Invalid employee');
+    const employee: any = await this.employeeModel.findById(employeeId).select('-password').lean();
+    if (!employee) throw new NotFoundException('Employee not found');
+    this.access.assertCanAccess(actor, String(employee._id), employee.branches);
+    return employee;
+  }
 
-    const year = new Date(dto.letterDate || Date.now()).getFullYear() || new Date().getFullYear();
-    const isDraft = dto.status === 'draft';
+  private async loadLetterFor(actor: Actor, id: string) {
+    if (!Types.ObjectId.isValid(id)) throw new BadRequestException('Invalid letter id');
+    const letter = await this.letterModel.findById(id);
+    if (!letter) throw new NotFoundException('HR letter not found');
+    this.access.assertCanAccess(actor, String(letter.employeeId), letter.branch);
+    return letter;
+  }
 
-    let letterNumber: string;
-    if (isDraft) {
-      letterNumber = `DRAFT-${template.memoPrefix.replace(/[/]/g, '-')}-${Date.now().toString().slice(-6)}`;
-    } else {
-      letterNumber = await this.generateNextLetterNumber(template.memoPrefix, year);
-    }
-
-    const inputData = {
+  private baseInput(dto: { inputData?: any; branch?: string; department?: string; designation?: string }, employee: any, prev: any = {}) {
+    return {
+      ...prev,
       ...(dto.inputData || {}),
-      branch: dto.branch || (employee.branches && employee.branches[0]) || '',
-      department: dto.department || employee.department || '',
-      designation: dto.designation || employee.jobPosition || '',
+      branch: pick(dto.branch, dto.inputData?.branch, prev.branch, employee.branches?.[0]) || '',
+      department: pick(dto.department, dto.inputData?.department, prev.department, employee.department) || '',
+      designation: pick(dto.designation, dto.inputData?.designation, prev.designation, employee.jobPosition) || '',
     };
+  }
 
-    const contentSnapshot = await this.buildContentSnapshot(
-      template,
-      employee,
+  private fileNameFor(employee: any, letterType: string, letterNumber: string, version = 1) {
+    return `${employee.employeeId || 'EMP'}_${letterType}_${letterNumber.replace(/[/]/g, '-')}${version > 1 ? `_v${version}` : ''}.pdf`;
+  }
+
+  private draftNumber(prefix: string) {
+    return `DRAFT-${prefix.replace(/[/]/g, '-')}-${randomBytes(3).toString('hex').toUpperCase()}`;
+  }
+
+  async previewLetter(dto: PreviewLetterDto, actor: Actor) {
+    const employee = await this.loadEmployeeFor(actor, dto.employeeId);
+    const template = await this.resolveTemplate(dto.letterType, dto.templateId);
+    const letterDate = dto.letterDate || today();
+    let letterNumber = await this.peekNextNumber(template.memoPrefix, yearOf(letterDate));
+    if (dto.draftId && Types.ObjectId.isValid(dto.draftId)) {
+      const draft = await this.letterModel.findById(dto.draftId, { letterNumber: 1, status: 1 }).lean();
+      if (draft && draft.status !== 'draft') letterNumber = draft.letterNumber;
+    }
+    const snapshot = await this.buildContentSnapshot(template, employee, {
       letterNumber,
-      dto.letterDate,
-      inputData,
-      dto.customSignatories,
-    );
+      letterDate,
+      effectiveDate: dto.effectiveDate,
+      inputData: this.baseInput(dto, employee),
+      customSignatories: dto.customSignatories,
+    });
+    return { snapshot, nextLetterNumber: letterNumber };
+  }
 
-    const fileName = `${employee.employeeId || 'EMP'}_${template.letterType}_${letterNumber.replace(/[/]/g, '-')}.pdf`;
+  async createLetter(dto: CreateLetterDto, actor: Actor, meta?: ReqMeta) {
+    const employee = await this.loadEmployeeFor(actor, dto.employeeId);
+    const template = await this.resolveTemplate(dto.letterType, dto.templateId);
+    const isDraft = dto.status === 'draft';
+    const inputData = this.baseInput(dto, employee);
 
-    const newLetter = await this.letterModel.create({
-      employeeId: employee._id,
-      employeeCode: employee.employeeId,
-      employeeName: employee.name,
-      employeePhoto: employee.photo,
-      letterType: dto.letterType,
-      letterNumber,
-      letterDate: dto.letterDate,
-      effectiveDate: dto.effectiveDate || dto.letterDate,
-      templateId: template._id,
+    // A unique-index clash can only come from a manual data edit; retry once
+    // with a fresh number rather than failing the user.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const letterNumber = isDraft ? this.draftNumber(template.memoPrefix) : await this.allocateNumber(template.memoPrefix, yearOf(dto.letterDate));
+      const contentSnapshot = await this.buildContentSnapshot(template, employee, {
+        letterNumber,
+        letterDate: dto.letterDate,
+        effectiveDate: dto.effectiveDate,
+        inputData,
+        customSignatories: dto.customSignatories,
+      });
+      try {
+        const letter = await this.letterModel.create({
+          employeeId: employee._id,
+          employeeCode: employee.employeeId,
+          employeeName: employee.name,
+          employeePhoto: employee.photo,
+          letterType: template.letterType,
+          letterNumber,
+          letterDate: dto.letterDate,
+          effectiveDate: dto.effectiveDate || dto.letterDate,
+          templateId: template._id,
+          branch: inputData.branch,
+          department: inputData.department,
+          designation: inputData.designation,
+          status: isDraft ? 'draft' : 'generated',
+          version: 1,
+          inputData,
+          contentSnapshot,
+          fileName: this.fileNameFor(employee, template.letterType, letterNumber),
+          remarks: dto.remarks || '',
+          generatedBy: this.who(actor),
+          generatedAt: new Date(),
+          issuedAt: isDraft ? null : new Date(),
+        });
+        await this.logAction({
+          letterId: letter._id,
+          letterNumber,
+          employeeId: employee._id,
+          employeeName: employee.name,
+          action: isDraft ? 'created' : 'generated',
+          performedBy: this.who(actor),
+          metadata: { letterType: template.letterType, status: letter.status },
+          ...meta,
+        });
+        return letter;
+      } catch (err: any) {
+        if (err?.code !== 11000 || attempt === 1) throw err;
+      }
+    }
+    throw new BadRequestException('Could not allocate a letter number, please try again');
+  }
+
+  async updateDraft(id: string, dto: UpdateDraftDto, actor: Actor, meta?: ReqMeta) {
+    const letter = await this.loadLetterFor(actor, id);
+    if (letter.status !== 'draft') throw new BadRequestException('Only drafts can be edited. Use "Reissue" to change an issued letter.');
+    const employee = await this.loadEmployeeFor(actor, String(letter.employeeId));
+    const template = await this.resolveTemplate(letter.letterType, dto.templateId || String(letter.templateId || ''));
+    const inputData = this.baseInput(dto, employee, letter.inputData || {});
+    const letterDate = dto.letterDate || letter.letterDate;
+    const effectiveDate = dto.effectiveDate || letter.effectiveDate;
+
+    letter.set({
+      letterDate,
+      effectiveDate,
       branch: inputData.branch,
       department: inputData.department,
       designation: inputData.designation,
-      status: dto.status || 'generated',
-      version: 1,
       inputData,
-      contentSnapshot,
-      fileName,
-      remarks: dto.remarks || '',
-      generatedBy: {
-        id: user?.userId || user?._id,
-        name: user?.name || user?.employeeName || 'Authorized HR',
-        role: user?.role || 'admin',
-      },
-      generatedAt: new Date(),
+      remarks: dto.remarks ?? letter.remarks,
+      contentSnapshot: await this.buildContentSnapshot(template, employee, {
+        letterNumber: letter.letterNumber,
+        letterDate,
+        effectiveDate,
+        inputData,
+        customSignatories: dto.customSignatories || letter.contentSnapshot?.signatories,
+      }),
+      updatedBy: this.who(actor),
     });
+    letter.markModified('inputData');
+    letter.markModified('contentSnapshot');
+    await letter.save();
+    await this.logAction({ letterId: letter._id, letterNumber: letter.letterNumber, employeeId: letter.employeeId, employeeName: letter.employeeName, action: 'updated', performedBy: this.who(actor), ...meta });
+    return letter;
+  }
 
-    // Audit Log
-    await this.logAction({
-      letterId: newLetter._id,
-      letterNumber: newLetter.letterNumber,
-      employeeId: employee._id,
-      employeeName: employee.name,
-      action: isDraft ? 'created' : 'generated',
-      performedBy: {
-        id: user?.userId || user?._id,
-        name: user?.name || user?.employeeName || 'Authorized HR',
-        role: user?.role || 'admin',
-      },
-      metadata: { letterType: dto.letterType, status: newLetter.status },
-      ipAddress: reqMeta?.ip,
-      userAgent: reqMeta?.userAgent,
+  // Turns a draft into an official letter with the next memo number.
+  async issueDraft(id: string, actor: Actor, meta?: ReqMeta) {
+    const draft = await this.loadLetterFor(actor, id);
+    if (draft.status !== 'draft') throw new BadRequestException('This letter has already been issued');
+    const employee = await this.loadEmployeeFor(actor, String(draft.employeeId));
+    const template = await this.resolveTemplate(draft.letterType, String(draft.templateId || ''));
+    const letterNumber = await this.allocateNumber(template.memoPrefix, yearOf(draft.letterDate));
+    const contentSnapshot = await this.buildContentSnapshot(template, employee, {
+      letterNumber,
+      letterDate: draft.letterDate,
+      effectiveDate: draft.effectiveDate,
+      inputData: draft.inputData,
+      customSignatories: draft.contentSnapshot?.signatories,
     });
-
-    return newLetter;
+    // Conditional update: a double click issues once; the second call
+    // finds the letter no longer a draft.
+    const issued = await this.letterModel.findOneAndUpdate(
+      { _id: draft._id, status: 'draft' },
+      {
+        $set: {
+          status: 'generated',
+          letterNumber,
+          contentSnapshot,
+          fileName: this.fileNameFor(employee, draft.letterType, letterNumber),
+          issuedAt: new Date(),
+          updatedBy: this.who(actor),
+        },
+      },
+      { new: true },
+    );
+    if (!issued) throw new BadRequestException('This letter has already been issued');
+    await this.logAction({ letterId: issued._id, letterNumber, employeeId: issued.employeeId, employeeName: issued.employeeName, action: 'issued', performedBy: this.who(actor), metadata: { draftNumber: draft.letterNumber }, ...meta });
+    return issued;
   }
 
   /**
-   * Reissue Letter (Version Control)
-   * Preserves historical letter and creates Version N+1
+   * Reissue (version control): keeps the original as "superseded" and
+   * creates version N+1 with the same memo number.
    */
-  async reissueLetter(id: string, dto: ReissueLetterDto, user: any, reqMeta?: { ip?: string; userAgent?: string }) {
-    const existing = await this.letterModel.findById(id);
-    if (!existing) throw new NotFoundException('Original letter not found');
+  async reissueLetter(id: string, dto: ReissueLetterDto, actor: Actor, meta?: ReqMeta) {
+    const existing = await this.loadLetterFor(actor, id);
+    if (existing.status === 'draft') throw new BadRequestException('Drafts are edited directly — reissue applies to issued letters');
+    if (existing.status === 'cancelled') throw new BadRequestException('A cancelled letter cannot be reissued');
+    if (existing.status === 'reissued') throw new BadRequestException('A newer version of this letter exists. Open the latest version to reissue it.');
 
-    const employee = await this.employeeModel.findById(existing.employeeId);
-    if (!employee) throw new NotFoundException('Employee not found');
-
-    const template = existing.templateId
-      ? await this.templateModel.findById(existing.templateId)
-      : await this.getTemplateForType(existing.letterType);
-
-    if (!template) throw new NotFoundException('Template not found');
-
+    const employee = await this.loadEmployeeFor(actor, String(existing.employeeId));
+    const template = await this.resolveTemplate(existing.letterType, String(existing.templateId || ''));
     const nextVersion = (existing.version || 1) + 1;
     const letterDate = dto.letterDate || existing.letterDate;
-    const inputData = { ...existing.inputData, ...(dto.inputData || {}) };
+    const effectiveDate = dto.effectiveDate || existing.effectiveDate;
+    const inputData = this.baseInput({ inputData: dto.inputData }, employee, existing.inputData || {});
 
-    const contentSnapshot = await this.buildContentSnapshot(
-      template,
-      employee,
-      existing.letterNumber,
-      letterDate,
-      inputData,
-      dto.customSignatories,
-    );
-
-    // Mark existing as superseded / reissued
-    existing.status = 'reissued';
-    await existing.save();
-
-    const fileName = `${employee.employeeId || 'EMP'}_${existing.letterType}_${existing.letterNumber.replace(/[/]/g, '-')}_v${nextVersion}.pdf`;
-
-    const reissuedLetter = await this.letterModel.create({
+    const reissued = await this.letterModel.create({
       employeeId: employee._id,
       employeeCode: employee.employeeId,
       employeeName: employee.name,
@@ -432,117 +644,128 @@ export class HrLetterService implements OnModuleInit {
       letterType: existing.letterType,
       letterNumber: existing.letterNumber,
       letterDate,
-      effectiveDate: dto.effectiveDate || existing.effectiveDate,
+      effectiveDate,
       templateId: template._id,
-      branch: inputData.branch || existing.branch,
-      department: inputData.department || existing.department,
-      designation: inputData.designation || existing.designation,
+      branch: inputData.branch,
+      department: inputData.department,
+      designation: inputData.designation,
       status: 'generated',
       version: nextVersion,
       parentLetterId: existing._id,
       inputData,
-      contentSnapshot,
-      fileName,
+      contentSnapshot: await this.buildContentSnapshot(template, employee, {
+        letterNumber: existing.letterNumber,
+        letterDate,
+        effectiveDate,
+        inputData,
+        customSignatories: dto.customSignatories || existing.contentSnapshot?.signatories,
+      }),
+      fileName: this.fileNameFor(employee, existing.letterType, existing.letterNumber, nextVersion),
       remarks: dto.remarks || existing.remarks,
       reissueReason: dto.reissueReason,
-      generatedBy: {
-        id: user?.userId || user?._id,
-        name: user?.name || user?.employeeName || 'Authorized HR',
-        role: user?.role || 'admin',
-      },
+      generatedBy: this.who(actor),
       generatedAt: new Date(),
+      issuedAt: new Date(),
     });
 
+    // Only mark the old version superseded once the new one exists.
+    existing.status = 'reissued';
+    await existing.save();
+
     await this.logAction({
-      letterId: reissuedLetter._id,
-      letterNumber: reissuedLetter.letterNumber,
+      letterId: reissued._id,
+      letterNumber: reissued.letterNumber,
       employeeId: employee._id,
       employeeName: employee.name,
       action: 'reissued',
-      performedBy: {
-        id: user?.userId || user?._id,
-        name: user?.name || user?.employeeName || 'Authorized HR',
-        role: user?.role || 'admin',
-      },
-      metadata: {
-        previousLetterId: existing._id,
-        version: nextVersion,
-        reissueReason: dto.reissueReason,
-      },
-      ipAddress: reqMeta?.ip,
-      userAgent: reqMeta?.userAgent,
+      performedBy: this.who(actor),
+      metadata: { previousLetterId: existing._id, version: nextVersion, reissueReason: dto.reissueReason },
+      ...meta,
     });
-
-    return reissuedLetter;
+    return reissued;
   }
 
-  /**
-   * Get single letter by ID, including its version history and audit log
-   */
-  async getLetterById(id: string) {
-    const letter = await this.letterModel.findById(id).lean();
-    if (!letter) throw new NotFoundException('HR letter not found');
-
-    // Find all versions of this letter number
-    const versions = await this.letterModel
-      .find({ letterNumber: letter.letterNumber })
-      .sort({ version: 1 })
-      .lean();
-
-    // Find audit logs
-    const auditLogs = await this.auditModel
-      .find({
-        $or: [{ letterId: letter._id }, { letterNumber: letter.letterNumber }],
-      })
-      .sort({ createdAt: -1 })
-      .lean();
-
-    return {
-      letter,
-      versions,
-      auditLogs,
-    };
+  async cancelLetter(id: string, reason: string, actor: Actor, meta?: ReqMeta) {
+    const letter = await this.loadLetterFor(actor, id);
+    if (!ISSUED_STATUSES.includes(letter.status)) {
+      throw new BadRequestException(letter.status === 'draft' ? 'Drafts can simply be deleted' : 'Only the current issued version can be cancelled');
+    }
+    letter.set({ status: 'cancelled', cancelledAt: new Date(), cancelReason: reason, cancelledBy: this.who(actor) });
+    await letter.save();
+    await this.logAction({ letterId: letter._id, letterNumber: letter.letterNumber, employeeId: letter.employeeId, employeeName: letter.employeeName, action: 'cancelled', performedBy: this.who(actor), metadata: { reason }, ...meta });
+    return letter;
   }
 
-  /**
-   * Query letters list with search and filters
-   */
-  async queryLetters(query: QueryLetterDto) {
-    const page = Math.max(1, parseInt(query.page || '1', 10));
-    const limit = Math.max(1, Math.min(100, parseInt(query.limit || '10', 10)));
-    const skip = (page - 1) * limit;
+  // Drafts can be deleted by anyone with delete permission; issued letters
+  // are official records — only a super admin may hard-delete them.
+  async deleteLetter(id: string, actor: Actor, meta?: ReqMeta) {
+    const letter = await this.loadLetterFor(actor, id);
+    if (letter.status !== 'draft' && !actor.isSuperAdmin) {
+      throw new ForbiddenException('Issued letters cannot be deleted. Cancel the letter instead so its record is kept.');
+    }
+    await this.logAction({
+      letterId: letter._id,
+      letterNumber: letter.letterNumber,
+      employeeId: letter.employeeId,
+      employeeName: letter.employeeName,
+      action: 'deleted',
+      performedBy: this.who(actor),
+      metadata: { letterType: letter.letterType, status: letter.status, version: letter.version },
+      ...meta,
+    });
+    await letter.deleteOne();
+    return { success: true, message: letter.status === 'draft' ? 'Draft deleted' : 'Letter deleted' };
+  }
 
-    const filter: any = {};
+  async getLetterById(id: string, actor: Actor) {
+    const doc = await this.loadLetterFor(actor, id);
+    const letter = doc.toObject();
+    const [versions, auditLogs] = await Promise.all([
+      letter.status === 'draft'
+        ? Promise.resolve([])
+        : this.letterModel
+            .find({ letterNumber: letter.letterNumber }, { version: 1, status: 1, letterDate: 1, generatedBy: 1, reissueReason: 1, createdAt: 1 })
+            .sort({ version: 1 })
+            .lean(),
+      this.auditModel
+        .find({ $or: [{ letterId: letter._id }, { letterNumber: letter.letterNumber }] }, { userAgent: 0 })
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .lean(),
+    ]);
+    return { letter, versions, auditLogs };
+  }
+
+  private scopeMatch(actor: Actor): Record<string, any> {
+    if (actor.scope === 'self') return { employeeId: new Types.ObjectId(actor.id) };
+    if (actor.scope === 'branch') return { branch: { $in: actor.branches } };
+    return {};
+  }
+
+  async queryLetters(query: QueryLetterDto, actor: Actor) {
+    const page = Math.max(1, parseInt(query.page || '1', 10) || 1);
+    const limit = Math.max(1, Math.min(100, parseInt(query.limit || '10', 10) || 10));
+    const filter: any = { ...this.scopeMatch(actor) };
 
     if (query.search) {
-      const searchRegex = new RegExp(query.search.trim(), 'i');
-      filter.$or = [
-        { employeeName: searchRegex },
-        { employeeCode: searchRegex },
-        { letterNumber: searchRegex },
-        { 'contentSnapshot.letterMeta.subject': searchRegex },
-      ];
+      // Already regex-escaped by the global sanitizeRequest middleware.
+      const re = new RegExp(query.search.trim(), 'i');
+      filter.$or = [{ employeeName: re }, { employeeCode: re }, { letterNumber: re }, { 'contentSnapshot.letterMeta.subject': re }];
     }
+    if (query.letterType && query.letterType !== 'all') filter.letterType = query.letterType;
+    const branches = this.access.resolveBranchFilter(actor, query.branch);
+    if (branches) filter.branch = { $in: branches };
+    if (query.department && query.department !== 'all') filter.department = query.department;
+    if (query.employeeId && Types.ObjectId.isValid(query.employeeId)) filter.employeeId = new Types.ObjectId(query.employeeId);
 
-    if (query.letterType && query.letterType !== 'all') {
-      filter.letterType = query.letterType;
-    }
-
-    if (query.branch && query.branch !== 'all') {
-      filter.branch = query.branch;
-    }
-
-    if (query.department && query.department !== 'all') {
-      filter.department = query.department;
-    }
-
-    if (query.status && query.status !== 'all') {
-      filter.status = query.status;
-    }
-
-    if (query.employeeId) {
-      filter.employeeId = new Types.ObjectId(query.employeeId);
-    }
+    // Superseded versions are hidden unless asked for; "issued" covers both
+    // stored spellings of an official letter.
+    const status = query.status || 'all';
+    if (status === 'issued' || status === 'generated') filter.status = { $in: ISSUED_STATUSES };
+    else if (status === 'all_versions') {
+      /* everything */
+    } else if (status !== 'all') filter.status = status;
+    else filter.status = { $ne: 'reissued' };
 
     if (query.startDate || query.endDate) {
       filter.letterDate = {};
@@ -550,114 +773,86 @@ export class HrLetterService implements OnModuleInit {
       if (query.endDate) filter.letterDate.$lte = query.endDate;
     }
 
-    const sortField = query.sortBy || 'createdAt';
-    const sortOrder = query.sortOrder === 'asc' ? 1 : -1;
-    const sort: any = { [sortField]: sortOrder };
+    const sortField = SORTABLE.has(query.sortBy || '') ? (query.sortBy as string) : 'createdAt';
+    const sort: any = { [sortField]: query.sortOrder === 'asc' ? 1 : -1, _id: -1 };
 
     const [items, totalItems] = await Promise.all([
-      this.letterModel.find(filter).sort(sort).skip(skip).limit(limit).lean(),
+      this.letterModel.find(filter, LIST_FIELDS).sort(sort).skip((page - 1) * limit).limit(limit).lean(),
       this.letterModel.countDocuments(filter),
     ]);
-
     return {
       items,
-      pagination: {
-        currentPage: page,
-        itemsPerPage: limit,
-        totalItems,
-        totalPages: Math.ceil(totalItems / limit) || 1,
-      },
+      pagination: { currentPage: page, itemsPerPage: limit, totalItems, totalPages: Math.ceil(totalItems / limit) || 1 },
     };
   }
 
-  /**
-   * Get letters for an employee profile
-   */
-  async getEmployeeLetters(employeeId: string) {
-    if (!Types.ObjectId.isValid(employeeId)) {
-      throw new BadRequestException('Invalid employee ID format');
-    }
+  async getEmployeeLetters(employeeId: string, actor: Actor) {
+    const employee = await this.loadEmployeeFor(actor, employeeId);
     return this.letterModel
-      .find({ employeeId: new Types.ObjectId(employeeId) })
+      .find({ employeeId: employee._id, status: { $ne: 'reissued' } }, LIST_FIELDS)
       .sort({ createdAt: -1 })
+      .limit(100)
       .lean();
   }
 
-  /**
-   * KPI / Dashboard Statistics
-   */
-  async getStats() {
-    const totalLetters = await this.letterModel.countDocuments();
-    const activeDrafts = await this.letterModel.countDocuments({ status: 'draft' });
-    const issuedLetters = await this.letterModel.countDocuments({ status: { $in: ['generated', 'issued', 'reissued'] } });
-
-    // Group by letter type
-    const byType = await this.letterModel.aggregate([
-      { $group: { _id: '$letterType', count: { $sum: 1 } } },
+  async getStats(actor: Actor) {
+    const scope = this.scopeMatch(actor);
+    const month = today().slice(0, 7);
+    const [issued, drafts, cancelled, thisMonth, byType] = await Promise.all([
+      this.letterModel.countDocuments({ ...scope, status: { $in: ISSUED_STATUSES } }),
+      this.letterModel.countDocuments({ ...scope, status: 'draft' }),
+      this.letterModel.countDocuments({ ...scope, status: 'cancelled' }),
+      this.letterModel.countDocuments({ ...scope, status: { $in: ISSUED_STATUSES }, letterDate: { $regex: `^${month}` } }),
+      this.letterModel.aggregate([{ $match: { ...scope, status: { $in: ISSUED_STATUSES } } }, { $group: { _id: '$letterType', count: { $sum: 1 } } }]),
     ]);
-
-    // Letters issued this current month
-    const currentYearMonth = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
-    const thisMonthCount = await this.letterModel.countDocuments({
-      letterDate: { $regex: `^${currentYearMonth}` },
-      status: { $in: ['generated', 'issued', 'reissued'] },
-    });
-
     return {
-      totalLetters,
-      activeDrafts,
-      issuedLetters,
-      thisMonthCount,
-      byType: byType.reduce((acc, curr) => {
-        acc[curr._id] = curr.count;
-        return acc;
-      }, {}),
+      totalLetters: issued + drafts + cancelled,
+      issuedLetters: issued,
+      activeDrafts: drafts,
+      cancelledLetters: cancelled,
+      thisMonthCount: thisMonth,
+      byType: byType.reduce((acc: any, cur: any) => ({ ...acc, [cur._id]: cur.count }), {}),
     };
   }
 
-  /**
-   * Delete letter
-   */
-  async deleteLetter(id: string, user: any, reqMeta?: { ip?: string; userAgent?: string }) {
-    const letter = await this.letterModel.findById(id);
-    if (!letter) throw new NotFoundException('Letter not found');
+  // ---------------------------------------------------------------------------
+  // Employee self-service
+  // ---------------------------------------------------------------------------
 
-    await this.logAction({
-      letterId: letter._id,
-      letterNumber: letter.letterNumber,
-      employeeId: letter.employeeId,
-      employeeName: letter.employeeName,
-      action: 'deleted',
-      performedBy: {
-        id: user?.userId || user?._id,
-        name: user?.name || user?.employeeName || 'Authorized HR',
-        role: user?.role || 'admin',
-      },
-      metadata: {
-        letterType: letter.letterType,
-        letterNumber: letter.letterNumber,
-        status: letter.status,
-      },
-      ipAddress: reqMeta?.ip,
-      userAgent: reqMeta?.userAgent,
-    });
-
-    await this.letterModel.findByIdAndDelete(id);
-    return { success: true, message: 'Letter deleted successfully' };
+  private myFilter(actor: Actor) {
+    if (!Types.ObjectId.isValid(actor.id)) throw new ForbiddenException('Not authenticated');
+    return { employeeId: new Types.ObjectId(actor.id), status: { $in: MY_STATUSES } };
   }
 
-  /**
-   * Log action into audit trail
-   */
+  async getMyLetters(actor: Actor) {
+    return this.letterModel.find(this.myFilter(actor), MY_LIST_FIELDS).sort({ letterDate: -1, createdAt: -1 }).limit(200).lean();
+  }
+
+  async getMyLetter(id: string, actor: Actor) {
+    if (!Types.ObjectId.isValid(id)) throw new BadRequestException('Invalid letter id');
+    const letter = await this.letterModel.findOne({ _id: new Types.ObjectId(id), ...this.myFilter(actor) }, MY_HIDDEN_FIELDS).lean();
+    if (!letter) throw new NotFoundException('Letter not found');
+    return letter;
+  }
+
+  async logMyAction(id: string, action: string, actor: Actor, meta?: ReqMeta) {
+    const letter = await this.getMyLetter(id, actor);
+    await this.logAction({ letterId: letter._id, letterNumber: letter.letterNumber, employeeId: letter.employeeId, employeeName: letter.employeeName, action, performedBy: this.who(actor), metadata: { selfService: true }, ...meta });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Audit trail
+  // ---------------------------------------------------------------------------
+
   async logAction(data: {
     letterId?: Types.ObjectId;
     letterNumber?: string;
     employeeId?: Types.ObjectId;
     employeeName?: string;
     action: string;
-    performedBy: { id: Types.ObjectId; name: string; role: string };
+    performedBy: Who;
     metadata?: Record<string, any>;
-    ipAddress?: string;
+    ip?: string;
     userAgent?: string;
   }) {
     try {
@@ -669,7 +864,7 @@ export class HrLetterService implements OnModuleInit {
         action: data.action,
         performedBy: data.performedBy,
         metadata: data.metadata || {},
-        ipAddress: data.ipAddress || '',
+        ipAddress: data.ip || '',
         userAgent: data.userAgent || '',
       });
     } catch (err) {
@@ -677,33 +872,40 @@ export class HrLetterService implements OnModuleInit {
     }
   }
 
-  /**
-   * Get all audit logs with pagination
-   */
-  async getAuditLogs(page = 1, limit = 20, search?: string) {
-    const skip = (page - 1) * limit;
+  async logClientAction(id: string, action: string, actor: Actor, meta?: ReqMeta) {
+    const letter = await this.loadLetterFor(actor, id);
+    await this.logAction({ letterId: letter._id, letterNumber: letter.letterNumber, employeeId: letter.employeeId, employeeName: letter.employeeName, action, performedBy: this.who(actor), ...meta });
+  }
+
+  async getAuditLogs(
+    opts: { page?: number; limit?: number; search?: string; action?: string; startDate?: string; endDate?: string },
+    actor: Actor,
+  ) {
+    const page = Math.max(1, opts.page || 1);
+    const limit = Math.max(1, Math.min(100, opts.limit || 20));
     const filter: any = {};
-    if (search) {
-      const reg = new RegExp(search.trim(), 'i');
-      filter.$or = [
-        { letterNumber: reg },
-        { employeeName: reg },
-        { action: reg },
-        { 'performedBy.name': reg },
-      ];
+    if (actor.scope === 'self') filter.employeeId = new Types.ObjectId(actor.id);
+    else if (actor.scope === 'branch') {
+      const ids = await this.employeeModel.find({ branches: { $in: actor.branches } }, { _id: 1 }).lean();
+      filter.employeeId = { $in: ids.map((e) => e._id) };
+    }
+    if (opts.search) {
+      const re = new RegExp(opts.search.trim(), 'i');
+      filter.$or = [{ letterNumber: re }, { employeeName: re }, { action: re }, { 'performedBy.name': re }];
+    }
+    if (opts.action && opts.action !== 'all') filter.action = opts.action;
+    if (opts.startDate || opts.endDate) {
+      filter.createdAt = {};
+      if (opts.startDate) filter.createdAt.$gte = new Date(`${opts.startDate}T00:00:00+06:00`);
+      if (opts.endDate) filter.createdAt.$lte = new Date(`${opts.endDate}T23:59:59.999+06:00`);
     }
     const [items, total] = await Promise.all([
-      this.auditModel.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      this.auditModel.find(filter, { userAgent: 0 }).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
       this.auditModel.countDocuments(filter),
     ]);
     return {
       items,
-      pagination: {
-        currentPage: page,
-        itemsPerPage: limit,
-        totalItems: total,
-        totalPages: Math.ceil(total / limit) || 1,
-      },
+      pagination: { currentPage: page, itemsPerPage: limit, totalItems: total, totalPages: Math.ceil(total / limit) || 1 },
     };
   }
 }

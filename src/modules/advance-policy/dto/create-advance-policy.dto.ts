@@ -24,6 +24,28 @@ export class CreateAdvancePolicyDto {
   minServiceMonths?: number;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  maxInstallments?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  maxAmount?: number;
+
+  @IsOptional()
+  @IsEnum(['yes', 'no'])
+  allowConcurrent?: string;
+
+  @IsOptional()
+  @IsEnum(['yes', 'no'])
+  allowDuringProbation?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsOptional()
   @IsEnum(['active', 'inactive'])
   status?: string;
 }

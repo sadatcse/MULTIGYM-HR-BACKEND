@@ -118,7 +118,22 @@ export class Requisition {
   attachments: Array<{ name: string; url: string }>;
 
   @Prop({ type: [SchemaTypes.Mixed], default: [] })
-  timeline: Array<{ action: string; status: string; remarks: string; by: { id: string; name: string; role: string }; at: Date }>;
+  timeline: Array<{ action: string; status: string; remarks: string; stepLabel?: string; by: { id: string; name: string; role: string }; at: Date }>;
+
+  // Tree workflow: route copied from the management tree when raised
+  // (nearest level first; each level verifies, the last approves).
+  // Requisitions raised before a tree was saved keep admin -> management.
+  @Prop({ type: [SchemaTypes.Mixed], default: [] })
+  approvalChain: Array<{ roles: string[]; label: string }>;
+
+  @Prop({ type: Number, default: 0 })
+  currentStep: number;
+
+  @Prop({ type: [String], default: [], index: true })
+  pendingRoles: string[];
+
+  @Prop({ type: [String], default: [] })
+  finalRoles: string[];
 }
 
 export const RequisitionSchema = SchemaFactory.createForClass(Requisition);

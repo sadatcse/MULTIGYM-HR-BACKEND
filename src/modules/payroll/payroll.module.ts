@@ -5,6 +5,13 @@ import { LatePolicy, LatePolicySchema } from '../late-policy/schemas/late-policy
 import { OvertimePolicy, OvertimePolicySchema } from '../overtime/schemas/overtime-policy.schema';
 import { LeaveType, LeaveTypeSchema } from '../leave-type/schemas/leave-type.schema';
 import { AttendanceRecord, AttendanceRecordSchema } from '../attendance/schemas/attendance.schema';
+import { OvertimeRecord, OvertimeRecordSchema } from '../overtime/schemas/overtime-record.schema';
+import { AdvancePolicy, AdvancePolicySchema } from '../advance-policy/schemas/advance-policy.schema';
+import { BonusPolicy, BonusPolicySchema } from '../bonus-policy/schemas/bonus-policy.schema';
+import { ProxyDuty, ProxyDutySchema } from '../proxy-duty/schemas/proxy-duty.schema';
+import { RosterAssignment, RosterAssignmentSchema } from '../roster/schemas/roster.schema';
+import { AllowanceRule, AllowanceRuleSchema } from '../payroll-policy/schemas/allowance-rule.schema';
+import { CommissionEntry, CommissionEntrySchema, CommissionPlan, CommissionPlanSchema } from '../payroll-policy/schemas/commission.schema';
 import {
   EmployeeLoan,
   EmployeeLoanSchema,
@@ -50,6 +57,13 @@ export class PayrollController {
     return { success: true, data: await this.service.listStructures(query, await this.actor(req)) };
   }
 
+  @Get('structures/:employeeId/history')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('salary-structures', 'view')
+  async structureHistory(@Param('employeeId') id: string, @Req() req: any) {
+    return { success: true, data: await this.service.structureHistory(id, await this.actor(req)) };
+  }
+
   @Get('structures/:employeeId')
   async structure(@Param('employeeId') id: string, @Req() req: any) {
     return { success: true, data: await this.service.getStructure(id, await this.actor(req)) };
@@ -68,6 +82,14 @@ export class PayrollController {
   @RequirePermission('employee-loans', 'view')
   async loans(@Query() query: any, @Req() req: any) {
     return { success: true, ...(await this.service.listLoans(query, await this.actor(req))) };
+  }
+
+  // Checks an advance against the active advance policy before it is recorded.
+  @Get('loans/eligibility')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('employee-loans', 'view')
+  async loanEligibility(@Query() query: any, @Req() req: any) {
+    return { success: true, data: await this.service.advanceEligibility(query, await this.actor(req)) };
   }
 
   @Post('loans')
@@ -105,6 +127,52 @@ export class PayrollController {
   @RequirePermission('payroll', 'delete')
   async removeAdjustment(@Param('id') id: string, @Req() req: any) {
     return this.service.removeAdjustment(id, await this.actor(req));
+  }
+
+  // ---- Policy overview & salary simulator ------------------------------------
+  @Get('policy-summary')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('payroll-policies', 'view')
+  async policySummary(@Req() req: any) {
+    return { success: true, data: await this.service.policySummary(await this.actor(req)) };
+  }
+
+  @Get('preview')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('payroll-policies', 'view')
+  async preview(@Query() query: any, @Req() req: any) {
+    return { success: true, data: await this.service.preview(query, await this.actor(req)) };
+  }
+
+  // ---- Bonus runs (bonus policy → month's adjustments) -------------------------
+  @Post('bonus/preview')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('bonus-policy', 'view')
+  async bonusPreview(@Body() body: any, @Req() req: any) {
+    return { success: true, data: await this.service.bonusPreview(body, await this.actor(req)) };
+  }
+
+  @Post('bonus/post')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('bonus-policy', 'edit')
+  async bonusPost(@Body() body: any, @Req() req: any) {
+    const data = await this.service.bonusPost(body, await this.actor(req));
+    return { success: true, data, message: `Bonus posted for ${data.posted} employee(s)` };
+  }
+
+  @Post('bonus/unpost')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('bonus-policy', 'edit')
+  async bonusUnpost(@Body() body: any, @Req() req: any) {
+    const data = await this.service.bonusUnpost(body, await this.actor(req));
+    return { success: true, data, message: `Removed ${data.removed} bonus entr${data.removed === 1 ? 'y' : 'ies'}` };
+  }
+
+  @Get('bonus/history/:policyId')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('bonus-policy', 'view')
+  async bonusHistory(@Param('policyId') policyId: string, @Req() req: any) {
+    return { success: true, data: await this.service.bonusHistory(policyId, await this.actor(req)) };
   }
 
   // ---- Runs -------------------------------------------------------------------
@@ -179,6 +247,14 @@ export class PayrollController {
       { name: OvertimePolicy.name, schema: OvertimePolicySchema },
       { name: LeaveType.name, schema: LeaveTypeSchema },
       { name: AttendanceRecord.name, schema: AttendanceRecordSchema },
+      { name: AdvancePolicy.name, schema: AdvancePolicySchema },
+      { name: BonusPolicy.name, schema: BonusPolicySchema },
+      { name: ProxyDuty.name, schema: ProxyDutySchema },
+      { name: RosterAssignment.name, schema: RosterAssignmentSchema },
+      { name: AllowanceRule.name, schema: AllowanceRuleSchema },
+      { name: CommissionPlan.name, schema: CommissionPlanSchema },
+      { name: CommissionEntry.name, schema: CommissionEntrySchema },
+      { name: OvertimeRecord.name, schema: OvertimeRecordSchema },
     ]),
     AttendanceModule,
     EmployeeHistoryModule,

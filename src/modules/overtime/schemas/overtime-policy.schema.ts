@@ -17,6 +17,14 @@ export class OvertimePolicy {
   @Prop({ required: true, type: Number, default: 30 })
   minOvertimeMinutes: number;
 
+  // Multiplier for hours worked on a holiday / weekly off (0 = same as ratePerHour).
+  @Prop({ type: Number, default: 0 })
+  offDayRate: number;
+
+  // Overtime per day is rounded down to this many minutes (0 = no rounding).
+  @Prop({ type: Number, default: 0 })
+  roundingMinutes: number;
+
   @Prop({ required: true, enum: ['active', 'inactive'], default: 'active' })
   status: string;
 }

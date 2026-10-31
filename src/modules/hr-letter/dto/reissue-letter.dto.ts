@@ -1,16 +1,17 @@
-import { IsNotEmpty, IsOptional, IsString, IsObject } from 'class-validator';
+import { IsNotEmpty, IsObject, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 
 export class ReissueLetterDto {
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Please give a reason for reissuing' })
   @IsString()
+  @MaxLength(500)
   reissueReason: string;
 
   @IsOptional()
-  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'letterDate must be YYYY-MM-DD' })
   letterDate?: string;
 
   @IsOptional()
-  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'effectiveDate must be YYYY-MM-DD' })
   effectiveDate?: string;
 
   @IsOptional()

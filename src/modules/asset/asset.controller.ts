@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpStatus, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpStatus, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { AssetService } from './asset.service';
 import { CreateAssetDto } from './dto/create-asset.dto';
 import { UpdateAssetDto } from './dto/update-asset.dto';
@@ -34,8 +34,8 @@ export class AssetController {
   @Put('update/:id')
   @UseGuards(PermissionsGuard)
   @RequirePermission('assets', 'edit')
-  async update(@Param('id') id: string, @Body() dto: UpdateAssetDto) {
-    const data = await this.assetService.update(id, dto);
+  async update(@Param('id') id: string, @Body() dto: UpdateAssetDto, @Req() req: any) {
+    const data = await this.assetService.update(id, dto, req.user?.id);
     return { statusCode: HttpStatus.OK, message: 'Asset updated successfully', data };
   }
 

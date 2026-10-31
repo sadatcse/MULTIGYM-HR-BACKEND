@@ -58,6 +58,10 @@ export class CreateLatePolicyDto {
   compensatedEarlyExit?: string;
 
   @IsOptional()
+  @IsEnum(['yes', 'no'])
+  earlyExitDeduction?: string;
+
+  @IsOptional()
   @IsEnum(['active', 'inactive'])
   status?: string;
 }

@@ -3,15 +3,21 @@ import { HydratedDocument, SchemaTypes, Types } from 'mongoose';
 
 export type LeaveApplicationDocument = HydratedDocument<LeaveApplication>;
 
-// Workflow: Employee -> Branch / Floor In-Charge verification ->
-// Manager (Admin & HR) verification -> Director approval.
-export const LEAVE_STATUSES = ['pending_branch', 'pending_hr', 'pending_director', 'approved', 'rejected', 'cancelled'] as const;
+// Workflow: the application walks up the decision-maker tree from the
+// applicant's role (status "pending", see approvalChain / currentStep).
+// Applications raised before a tree was saved keep the original fixed
+// stages: Branch / Floor In-Charge -> Manager (Admin & HR) -> Director.
+export const LEAVE_STATUSES = ['pending', 'pending_branch', 'pending_hr', 'pending_director', 'approved', 'rejected', 'cancelled'] as const;
+export const PENDING_LEAVE = ['pending', 'pending_branch', 'pending_hr', 'pending_director'];
 export const LEAVE_STAGES = ['branch', 'hr', 'director'] as const;
 export const RECOMMENDATIONS = ['recommended', 'partially_recommended', 'not_recommended'] as const;
 export const FINAL_DECISIONS = ['approved', 'partially_approved', 'rejected'] as const;
 
 export interface LeaveStageAction {
-  stage: 'branch' | 'hr' | 'director';
+  stage: 'branch' | 'hr' | 'director' | 'step';
+  step?: number; // chain step index (tree workflow)
+  stepLabel?: string; // role(s) acting at that step
+  final?: boolean;
   decision: string; // recommendation for branch/hr, final decision for director
   recommendedDays?: number;
   remarks?: string;
@@ -96,6 +102,21 @@ export class LeaveApplication {
 
   @Prop({ type: [SchemaTypes.Mixed], default: [] })
   actions: LeaveStageAction[];
+
+  // Tree workflow: the route copied from the decision-maker tree when the
+  // application was raised (nearest level first, last = final decision).
+  @Prop({ type: [SchemaTypes.Mixed], default: [] })
+  approvalChain: Array<{ roles: string[]; label: string }>;
+
+  @Prop({ type: Number, default: 0 })
+  currentStep: number;
+
+  // Normalised role keys that can act now / give the final decision.
+  @Prop({ type: [String], default: [], index: true })
+  pendingRoles: string[];
+
+  @Prop({ type: [String], default: [] })
+  finalRoles: string[];
 
   // Final outcome (set at director approval). A partial approval may grant
   // fewer days / a narrower date range than requested.

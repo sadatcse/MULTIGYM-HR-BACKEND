@@ -47,6 +47,11 @@ export class LatePolicy {
   @Prop({ required: true, enum: ['yes', 'no'], default: 'yes' })
   compensatedEarlyExit: string;
 
+  // Payroll deducts early exits beyond the monthly allowance (same method and
+  // rate as late arrivals). Off by default: older policies never deducted them.
+  @Prop({ enum: ['yes', 'no'], default: 'no' })
+  earlyExitDeduction: string;
+
   @Prop({ required: true, enum: ['active', 'inactive'], default: 'active' })
   status: string;
 }

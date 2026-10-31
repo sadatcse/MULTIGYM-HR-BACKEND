@@ -22,6 +22,7 @@ export const SELF_SERVICE_KEYS = new Set([
   'my-obligations',
   'my-maintenance-requests',
   'my-requisitions',
+  'my-letters',
   'maintenance-create',
   'requisition-create',
   'requisition-details',

@@ -13,7 +13,7 @@ import { todayStr } from '../../common/helpers/hr-date.helper';
 const ACTIVE_TASK = ['PENDING', 'IN_PROGRESS', 'SUBMITTED', 'UNDER_REVIEW', 'WAITING_FOR_APPROVAL', 'OVERDUE'];
 const OPEN_MAINTENANCE = ['OPEN', 'UNDER_REVIEW', 'ASSIGNED', 'IN_PROGRESS'];
 const WORKED = ['present', 'late', 'half_day', 'missing_punch'];
-const PENDING_LEAVE = ['pending_branch', 'pending_hr', 'pending_director'];
+const PENDING_LEAVE = ['pending', 'pending_branch', 'pending_hr', 'pending_director'];
 const INACTIVE = ['resigned', 'terminated', 'inactive'];
 
 @Injectable()

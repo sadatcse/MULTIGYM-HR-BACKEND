@@ -1,4 +1,4 @@
-import { IsBoolean, IsDateString, IsEnum, IsMongoId, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsDateString, IsEnum, IsMongoId, IsNotEmpty, IsNumber, IsOptional, IsString, Min, ValidateIf } from 'class-validator';
 
 export class CreateAssetDto {
   @IsMongoId({ message: 'A valid asset type is required' })
@@ -48,6 +48,16 @@ export class CreateAssetDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  // Asset location id; '' or null clears it.
+  @IsOptional()
+  @ValidateIf((o) => o.location !== '')
+  @IsMongoId({ message: 'Pick a valid store location' })
+  location?: string | null;
+
+  @IsOptional()
+  @IsString()
+  storageSpot?: string;
 
   @IsOptional()
   @IsNumber()

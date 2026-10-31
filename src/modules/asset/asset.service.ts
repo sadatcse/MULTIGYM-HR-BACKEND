@@ -1,8 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Asset, AssetDocument } from './schemas/asset.schema';
 import { AssetAssignment, AssetAssignmentDocument } from '../asset-assignment/schemas/asset-assignment.schema';
+import { AssetLocation, AssetLocationDocument } from '../asset-location/schemas/asset-location.schema';
+import { Employee, EmployeeDocument } from '../user/schemas/employee.schema';
 import { CreateAssetDto } from './dto/create-asset.dto';
 import { UpdateAssetDto } from './dto/update-asset.dto';
 
@@ -49,6 +51,9 @@ function processAssetQuantities(dto: any) {
   };
 }
 
+// "Main store (Rack B)" — how a stock location reads in the audit ledger.
+const placeText = (name?: string, spot?: string) => (name ? `${name}${spot ? ` (${spot})` : ''}` : 'no location');
+
 function withComputedQuantities(asset: any, assignedByAssetId: Map<string, number>) {
   const obj = asset.toObject ? asset.toObject() : asset;
   const quantityAssigned = assignedByAssetId.get(obj._id.toString()) || 0;
@@ -68,8 +73,24 @@ export class AssetService {
   constructor(
     @InjectModel(Asset.name) private readonly assetModel: Model<AssetDocument>,
     @InjectModel(AssetAssignment.name) private readonly assignmentModel: Model<AssetAssignmentDocument>,
+    @InjectModel(AssetLocation.name) private readonly locationModel: Model<AssetLocationDocument>,
+    @InjectModel(Employee.name) private readonly employeeModel: Model<EmployeeDocument>,
     private readonly transactionService: AssetTransactionService,
   ) {}
+
+  // '' / null means no location; anything else must be an existing location.
+  private async resolveLocation(value?: string | null) {
+    if (!value) return null;
+    const location = await this.locationModel.findById(value).select('name').lean();
+    if (!location) throw new BadRequestException('Store location not found');
+    return location;
+  }
+
+  private async actorName(id?: string) {
+    if (!id || !Types.ObjectId.isValid(id)) return 'System Admin';
+    const emp = await this.employeeModel.findById(id).select('name').lean();
+    return emp?.name || 'System Admin';
+  }
 
   private async getAssignedQuantityMap(assetIds: any[]): Promise<Map<string, number>> {
     if (!assetIds.length) return new Map();
@@ -88,7 +109,8 @@ export class AssetService {
       throw new BadRequestException(`Asset code "${dto.assetCode}" already exists.`);
     }
 
-    const payload = processAssetQuantities(dto);
+    const location = await this.resolveLocation(dto.location);
+    const payload = processAssetQuantities({ ...dto, location: location?._id ?? null, storageSpot: (dto.storageSpot || '').trim() });
     const created = await this.assetModel.create(payload);
 
     // Create Audit Ledger Entry
@@ -103,14 +125,14 @@ export class AssetService {
       newStatus: created.status,
       condition: created.condition || 'New',
       performedBy: 'System Admin',
-      notes: `Asset stock created with total quantity: ${created.quantityTotal}`,
+      notes: `Asset stock created with total quantity: ${created.quantityTotal}${location ? ` · stored at ${placeText(location.name, created.storageSpot)}` : ''}`,
     });
 
     return withComputedQuantities(created, new Map());
   }
 
   async findAll(query: Record<string, any>) {
-    const { search, assetType, status, isLowStock } = query;
+    const { search, assetType, status, isLowStock, location } = query;
     const page = parseInt(query.page, 10) || 1;
     const limit = parseInt(query.limit, 10) || 10;
     const skip = (page - 1) * limit;
@@ -121,7 +143,13 @@ export class AssetService {
         { assetCode: { $regex: search, $options: 'i' } },
         { description: { $regex: search, $options: 'i' } },
         { serialNumber: { $regex: search, $options: 'i' } },
+        { storageSpot: { $regex: search, $options: 'i' } },
       ];
+    }
+    // 'none' lists assets that have no location yet.
+    if (location && location !== 'all') {
+      if (location !== 'none' && !Types.ObjectId.isValid(location)) throw new BadRequestException('Invalid location');
+      filter.location = location === 'none' ? null : location;
     }
     if (assetType && assetType !== 'all') filter.assetType = assetType;
     if (status && status !== 'all') filter.status = status;
@@ -129,7 +157,13 @@ export class AssetService {
 
     const [totalItems, data] = await Promise.all([
       this.assetModel.countDocuments(filter),
-      this.assetModel.find(filter).populate('assetType', 'name category trackingType returnable requiresSize requiresSerialNumber').sort({ createdAt: -1 }).skip(skip).limit(limit),
+      this.assetModel
+        .find(filter)
+        .populate('assetType', 'name category trackingType returnable requiresSize requiresSerialNumber')
+        .populate('location', 'name branch status')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
     ]);
 
     const assignedMap = await this.getAssignedQuantityMap(data.map((a) => a._id));
@@ -144,7 +178,10 @@ export class AssetService {
   }
 
   async findById(id: string) {
-    const result = await this.assetModel.findById(id).populate('assetType', 'name category trackingType returnable requiresSize requiresSerialNumber replacementIntervalMonths');
+    const result = await this.assetModel
+      .findById(id)
+      .populate('assetType', 'name category trackingType returnable requiresSize requiresSerialNumber replacementIntervalMonths')
+      .populate({ path: 'location', select: 'name branch details inCharge status', populate: { path: 'inCharge', select: 'name employeeId mobileNumber' } });
     if (!result) {
       throw new NotFoundException('Asset not found');
     }
@@ -152,7 +189,7 @@ export class AssetService {
     return withComputedQuantities(result, assignedMap);
   }
 
-  async update(id: string, dto: UpdateAssetDto) {
+  async update(id: string, dto: UpdateAssetDto, actorId?: string) {
     if (dto.assetCode) {
       const existing = await this.assetModel.findOne({
         _id: { $ne: id },
@@ -169,6 +206,19 @@ export class AssetService {
     }
 
     const updatePayload: any = { ...dto };
+
+    // A new location or shelf is a stock move: apply it and note it in the ledger below.
+    let move: { from: string; to: string } | null = null;
+    if (dto.location !== undefined || dto.storageSpot !== undefined) {
+      const before = current.location ? await this.locationModel.findById(current.location).select('name').lean() : null;
+      const location = dto.location !== undefined ? await this.resolveLocation(dto.location) : before;
+      updatePayload.location = location?._id ?? null;
+      updatePayload.storageSpot = dto.storageSpot !== undefined ? dto.storageSpot.trim() : current.storageSpot || '';
+      const from = placeText(before?.name, current.storageSpot);
+      const to = placeText(location?.name, updatePayload.storageSpot);
+      if (from !== to) move = { from, to };
+    }
+
     if (dto.sizeVariants && dto.sizeVariants.length > 0) {
       updatePayload.quantityTotal = dto.sizeVariants.reduce((sum, v) => sum + (Number(v.quantityTotal) || 0), 0);
       updatePayload.sizeVariants = dto.sizeVariants.map((v) => {
@@ -198,7 +248,22 @@ export class AssetService {
       throw new NotFoundException('Asset not found');
     }
     const assignedMap = await this.getAssignedQuantityMap([result._id]);
-    return withComputedQuantities(result, assignedMap);
+    const computed = withComputedQuantities(result, assignedMap);
+
+    if (move) {
+      await this.transactionService.createTransaction({
+        transactionType: 'TRANSFER',
+        asset: result._id as any,
+        assetCode: result.assetCode,
+        assetName: result.description || result.assetCode,
+        quantity: computed.quantityAvailable,
+        previousStatus: result.status,
+        newStatus: result.status,
+        performedBy: await this.actorName(actorId),
+        notes: `Stock moved from ${move.from} to ${move.to}`,
+      });
+    }
+    return computed;
   }
 
   async remove(id: string) {

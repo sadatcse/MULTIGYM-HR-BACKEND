@@ -14,6 +14,7 @@ import {
   HrLetterAuditLog,
   HrLetterAuditLogSchema,
 } from './schemas/hr-letter-audit-log.schema';
+import { HrLetterCounter, HrLetterCounterSchema } from './schemas/hr-letter-counter.schema';
 import { Employee, EmployeeSchema } from '../user/schemas/employee.schema';
 import { Setting, SettingSchema } from '../setting/schemas/setting.schema';
 import { Branch, BranchSchema } from '../branch/schemas/branch.schema';
@@ -27,6 +28,7 @@ import { BranchModule } from '../branch/branch.module';
       { name: HrLetterTemplate.name, schema: HrLetterTemplateSchema },
       { name: EmployeeHrLetter.name, schema: EmployeeHrLetterSchema },
       { name: HrLetterAuditLog.name, schema: HrLetterAuditLogSchema },
+      { name: HrLetterCounter.name, schema: HrLetterCounterSchema },
       { name: Employee.name, schema: EmployeeSchema },
       { name: Setting.name, schema: SettingSchema },
       { name: Branch.name, schema: BranchSchema },

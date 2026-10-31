@@ -63,6 +63,9 @@ export class SalaryStructure {
     newBasic: number;
     previousGross: number;
     newGross: number;
+    // Full breakdown before / after the change (revisions saved since history was added).
+    previous?: Record<string, any> | null;
+    snapshot?: Record<string, any>;
     remarks: string;
     by: { id: string; name: string };
     at: Date;
@@ -122,6 +125,10 @@ export class EmployeeLoan {
 
   @Prop({ type: SchemaTypes.Mixed, default: null })
   approvedBy: { id: string; name: string } | null;
+
+  // Recorded when HR granted an advance outside the active advance policy.
+  @Prop({ type: SchemaTypes.Mixed, default: null })
+  policyOverride: { policy: string; failed: string[]; reason: string; by: { id: string; name: string }; at: Date } | null;
 }
 export const EmployeeLoanSchema = SchemaFactory.createForClass(EmployeeLoan);
 
@@ -161,8 +168,14 @@ export class PayrollAdjustment {
 
   @Prop({ type: SchemaTypes.Mixed, default: null })
   createdBy: { id: string; name: string } | null;
+
+  // Set when a policy run created the adjustment (e.g. a bonus policy), so
+  // running it again replaces the earlier figures instead of adding twice.
+  @Prop({ type: SchemaTypes.Mixed, default: null })
+  source: { kind: string; id: string; label?: string } | null;
 }
 export const PayrollAdjustmentSchema = SchemaFactory.createForClass(PayrollAdjustment);
+PayrollAdjustmentSchema.index({ 'source.id': 1, month: 1 });
 
 // ---------------------------------------------------------------------------
 // Payroll run (one per month per branch scope) and its payslips.
@@ -248,6 +261,8 @@ export class Payslip {
     unpaidLeave: number;
     weekend: number;
     holiday: number;
+    earlyLeave?: number;
+    offDaysWorked?: number;
     overtimeHours: number;
   };
 
@@ -258,6 +273,10 @@ export class Payslip {
   @Prop({ type: Number, default: 0 }) otherAllowances: number;
   @Prop({ type: Number, default: 0 }) gross: number;
   @Prop({ type: Number, default: 0 }) overtimePay: number;
+  // Allowance rules (duty, holiday work, attendance, meal...) and proxy duty pay.
+  @Prop({ type: Number, default: 0 }) allowancePay: number;
+  // Approved sales / PT commission for the month.
+  @Prop({ type: Number, default: 0 }) commission: number;
   @Prop({ type: Number, default: 0 }) bonus: number;
   @Prop({ type: Number, default: 0 }) otherEarnings: number;
   @Prop({ type: Number, default: 0 }) totalEarnings: number;
@@ -274,7 +293,7 @@ export class Payslip {
 
   // Line items behind the summed figures (for the payslip print).
   @Prop({ type: [SchemaTypes.Mixed], default: [] })
-  lines: Array<{ kind: 'earning' | 'deduction'; label: string; amount: number; ref?: string }>;
+  lines: Array<{ kind: 'earning' | 'deduction'; group?: string; label: string; amount: number; ref?: string }>;
 
   @Prop({ trim: true, default: '' })
   remarks: string;

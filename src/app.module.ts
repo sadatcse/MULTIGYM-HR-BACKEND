@@ -27,6 +27,7 @@ import { GymCalendarModule } from './modules/gym-calendar/gym-calendar.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { AssetTypeModule } from './modules/asset-type/asset-type.module';
+import { AssetLocationModule } from './modules/asset-location/asset-location.module';
 import { AssetModule } from './modules/asset/asset.module';
 import { AssetAssignmentModule } from './modules/asset-assignment/asset-assignment.module';
 import { AssetTransactionModule } from './modules/asset-transaction/asset-transaction.module';
@@ -56,6 +57,9 @@ import { RosterModule } from './modules/roster/roster.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { LeaveModule } from './modules/leave/leave.module';
 import { PayrollModule } from './modules/payroll/payroll.module';
+import { PayrollPolicyModule } from './modules/payroll-policy/payroll-policy.module';
+import { DutyOvertimeModule } from './modules/duty-overtime/duty-overtime.module';
+import { DutyPlanModule } from './modules/duty-plan/duty-plan.module';
 import { RequisitionModule } from './modules/requisition/requisition.module';
 import { DisciplineModule } from './modules/discipline/discipline.module';
 import { HrDashboardModule } from './modules/hr-dashboard/hr-dashboard.module';
@@ -96,6 +100,7 @@ import { HrDashboardModule } from './modules/hr-dashboard/hr-dashboard.module';
     ChatModule,
     UploadModule,
     AssetTypeModule,
+    AssetLocationModule,
     AssetModule,
     AssetAssignmentModule,
     AssetTransactionModule,
@@ -119,6 +124,9 @@ import { HrDashboardModule } from './modules/hr-dashboard/hr-dashboard.module';
     AttendanceModule,
     LeaveModule,
     PayrollModule,
+    PayrollPolicyModule,
+    DutyOvertimeModule,
+    DutyPlanModule,
     RequisitionModule,
     DisciplineModule,
     HrDashboardModule,

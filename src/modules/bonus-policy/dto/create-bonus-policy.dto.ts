@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsNumber, IsOptional, IsEnum, Min } from 'class-validator';
+import { IsNotEmpty, IsString, IsNumber, IsOptional, IsEnum, IsObject, Min } from 'class-validator';
 
 export class CreateBonusPolicyDto {
   @IsNotEmpty({ message: 'Policy name is required' })
@@ -21,6 +21,37 @@ export class CreateBonusPolicyDto {
   @IsOptional()
   @IsString()
   applicableMonth?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  minServiceMonths?: number;
+
+  @IsOptional()
+  @IsEnum(['none', 'service_months'])
+  proRata?: string;
+
+  @IsOptional()
+  @IsEnum(['yes', 'no'])
+  excludeProbation?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(-1)
+  maxAbsentDays?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(-1)
+  maxLateDays?: number;
+
+  @IsOptional()
+  @IsObject()
+  appliesTo?: { designations?: string[]; branches?: string[]; employeeTypes?: string[] };
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
 
   @IsOptional()
   @IsEnum(['active', 'inactive'])

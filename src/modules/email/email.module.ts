@@ -1,11 +1,10 @@
 import { Module } from '@nestjs/common';
 import { EmailService } from './email.service';
-import { EmailController } from './email.controller';
 
-// Not imported by AppModule — mirrors the original, where these files existed but
-// were never wired into server.js/routes.js.
+// Provides EmailService to other modules (password reset). EmailController
+// (POST /email/test) is deliberately not registered here.
 @Module({
-  controllers: [EmailController],
   providers: [EmailService],
+  exports: [EmailService],
 })
 export class EmailModule {}

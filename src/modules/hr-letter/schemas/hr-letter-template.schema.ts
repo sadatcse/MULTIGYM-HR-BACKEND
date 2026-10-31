@@ -54,6 +54,10 @@ export class HrLetterTemplate {
     employeeField?: string;
     required: boolean;
     defaultValue?: string;
+    // text | textarea | date | money | percent | number — inferred from the
+    // key when missing (see letter-format.helper.ts).
+    type?: string;
+    placeholder?: string;
   }>;
 
   @Prop({ type: [Object], default: [] })

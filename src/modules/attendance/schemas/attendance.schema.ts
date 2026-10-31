@@ -151,6 +151,10 @@ export class AttendanceRecord {
   @Prop({ type: Number, default: 0 })
   overtimeMinutes: number;
 
+  // 'holiday' / 'weekend' when the day was worked on an off day (holiday duty pay).
+  @Prop({ trim: true, default: '' })
+  offDay: string;
+
   @Prop({ trim: true, default: '' })
   leaveTypeName: string;
 

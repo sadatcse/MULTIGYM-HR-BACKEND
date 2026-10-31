@@ -29,6 +29,11 @@ export class HrLetterAuditLog {
       'deleted',
       'reissued',
       'viewed',
+      'issued',
+      'updated',
+      'cancelled',
+      'template_updated',
+      'template_reset',
     ],
     index: true,
   })

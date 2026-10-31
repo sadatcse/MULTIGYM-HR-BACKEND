@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsNumber, IsOptional, IsEnum, IsArray, IsBoolean, Min } from 'class-validator';
+import { IsNotEmpty, IsString, IsNumber, IsOptional, IsEnum, IsArray, IsBoolean, Min, IsIn, IsObject } from 'class-validator';
 
 export class CreateWorkScheduleDto {
   @IsNotEmpty({ message: 'Schedule name is required' })
@@ -33,6 +33,14 @@ export class CreateWorkScheduleDto {
   @IsOptional()
   @IsArray()
   timeSlots?: any[];
+
+  @IsOptional()
+  @IsIn(['single', 'multi', 'weekly'])
+  scheduleMode?: string;
+
+  @IsOptional()
+  @IsObject()
+  weeklySlots?: Record<string, Array<{ startTime: string; endTime: string }>>;
 
   @IsOptional()
   @IsNumber()

@@ -28,6 +28,16 @@ export class HrConfig {
   @Prop({ type: SchemaTypes.Mixed, default: {} })
   requisitionStages: { admin: string[]; management: string[]; purchase: string[] };
 
+  // Approval hierarchies drawn on the HR Workflow page ({ role, parent }).
+  // Leave follows the decision-maker tree, requisitions the management tree:
+  // a request walks up from the applicant's role, every level above
+  // recommends, the top decides. Empty = the fixed stages above still apply.
+  @Prop({ type: [SchemaTypes.Mixed], default: [] })
+  decisionTree: Array<{ role: string; parent: string | null }>;
+
+  @Prop({ type: [SchemaTypes.Mixed], default: [] })
+  managementTree: Array<{ role: string; parent: string | null }>;
+
   @Prop({ type: SchemaTypes.Mixed, default: {} })
   attendance: {
     defaultInTime: string;
@@ -71,6 +81,8 @@ export const DEFAULT_HR_CONFIG = {
     management: ['DIRECTOR', 'MD', 'MANAGING DIRECTOR'],
     purchase: ['ADMIN', 'HR ADMIN', 'MANAGER', 'MANAGER (ADMIN & HR)', 'GENERAL MANAGER'],
   },
+  decisionTree: [] as Array<{ role: string; parent: string | null }>,
+  managementTree: [] as Array<{ role: string; parent: string | null }>,
   attendance: {
     defaultInTime: '09:00',
     defaultOutTime: '17:00',

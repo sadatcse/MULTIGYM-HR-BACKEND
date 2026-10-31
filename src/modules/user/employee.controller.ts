@@ -21,6 +21,8 @@ import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { LoginEmployeeDto } from './dto/login-employee.dto';
 import { ChangePasswordEmployeeDto } from './dto/change-password-employee.dto';
+import { ForgotPasswordDto, ResetPasswordDto, VerifyResetCodeDto } from './dto/password-reset.dto';
+import { PasswordResetService } from './password-reset.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
@@ -32,6 +34,7 @@ export class EmployeeController {
     private readonly employeeService: EmployeeService,
     private readonly jwtService: JwtService,
     private readonly access: HrAccessService,
+    private readonly passwordReset: PasswordResetService,
   ) {}
 
   @Post('login')
@@ -69,6 +72,25 @@ export class EmployeeController {
       user: employeeResponse, // alias for frontend compatibility
       token,
     };
+  }
+
+  // Forgot password (public): email a 6-digit code → verify → set new password.
+  @Post('forgot-password')
+  @HttpCode(200)
+  forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.passwordReset.requestCode(dto.email);
+  }
+
+  @Post('verify-reset-code')
+  @HttpCode(200)
+  verifyResetCode(@Body() dto: VerifyResetCodeDto) {
+    return this.passwordReset.verifyCode(dto.email, dto.code);
+  }
+
+  @Post('reset-password')
+  @HttpCode(200)
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.passwordReset.resetPassword(dto.email, dto.code, dto.newPassword);
   }
 
   @Post('logout')

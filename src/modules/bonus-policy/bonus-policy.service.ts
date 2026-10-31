@@ -5,6 +5,7 @@ import { BonusPolicy, BonusPolicyDocument } from './schemas/bonus-policy.schema'
 import { CreateBonusPolicyDto } from './dto/create-bonus-policy.dto';
 import { UpdateBonusPolicyDto } from './dto/update-bonus-policy.dto';
 import { BaseCrudService } from '../../common/services/base-crud.service';
+import { cleanAppliesTo } from '../payroll/payroll-engine';
 
 @Injectable()
 export class BonusPolicyService extends BaseCrudService<BonusPolicyDocument> {
@@ -25,7 +26,7 @@ export class BonusPolicyService extends BaseCrudService<BonusPolicyDocument> {
       throw new BadRequestException(`Bonus policy "${policyName}" already exists.`);
     }
 
-    const newDoc = new this.bonusPolicyModel(createDto);
+    const newDoc = new this.bonusPolicyModel({ ...createDto, appliesTo: cleanAppliesTo(createDto.appliesTo) });
     return newDoc.save();
   }
 
@@ -73,7 +74,9 @@ export class BonusPolicyService extends BaseCrudService<BonusPolicyDocument> {
       }
     }
 
-    return this.bonusPolicyModel.findByIdAndUpdate(id, updateDto, { new: true });
+    const patch: any = { ...updateDto };
+    if (patch.appliesTo !== undefined) patch.appliesTo = cleanAppliesTo(patch.appliesTo);
+    return this.bonusPolicyModel.findByIdAndUpdate(id, patch, { new: true });
   }
 
   async remove(id: string) {

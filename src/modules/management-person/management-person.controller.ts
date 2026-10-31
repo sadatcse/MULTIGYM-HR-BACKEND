@@ -24,7 +24,7 @@ export class ManagementPersonController {
 
   @Post()
   @UseGuards(PermissionsGuard)
-  @RequirePermission('management-persons', 'add')
+  @RequirePermission('hr-workflow-config', 'add')
   async create(@Body() createDto: CreateManagementPersonDto, @Req() req: any) {
     const userId = req.user?.id || req.user?._id;
     const data = await this.managementPersonService.create(createDto, userId);
@@ -76,7 +76,7 @@ export class ManagementPersonController {
 
   @Patch(':id')
   @UseGuards(PermissionsGuard)
-  @RequirePermission('management-persons', 'edit')
+  @RequirePermission('hr-workflow-config', 'edit')
   async update(
     @Param('id') id: string,
     @Body() updateDto: UpdateManagementPersonDto,
@@ -93,7 +93,7 @@ export class ManagementPersonController {
 
   @Delete(':id')
   @UseGuards(PermissionsGuard)
-  @RequirePermission('management-persons', 'delete')
+  @RequirePermission('hr-workflow-config', 'delete')
   async remove(@Param('id') id: string) {
     await this.managementPersonService.remove(id);
     return {

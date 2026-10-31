@@ -47,6 +47,20 @@ export async function createApp() {
   });
   app.use(['/api/employee/login', '/api/user/login'], loginLimiter);
 
+  // Forgot-password endpoints: every request counts (a successful code
+  // request is still an email sent), 10 per 15 minutes per IP.
+  const resetLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { statusCode: 429, message: 'Too many password reset attempts. Please wait 15 minutes and try again.' },
+  });
+  app.use(
+    ['employee', 'user'].flatMap((p) => ['forgot-password', 'verify-reset-code', 'reset-password'].map((r) => `/api/${p}/${r}`)),
+    resetLimiter,
+  );
+
   // Allowed cross-origin requests for web and mobile clients
   // CORS configuration
   const allowedOrigins = (

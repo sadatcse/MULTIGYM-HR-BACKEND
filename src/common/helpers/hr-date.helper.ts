@@ -55,10 +55,26 @@ export function todayStr(offsetMinutes = 360): string {
 }
 
 // Wall-clock "HH:mm" -> minutes since midnight. Returns null for blanks.
+// "HH:mm" or "h:mm AM/PM" → minutes after midnight. Duty times saved from
+// the duty-time page use the 12-hour form ("03:00 PM").
 export function timeToMinutes(t?: string): number | null {
-  if (!t || !/^\d{1,2}:\d{2}/.test(t)) return null;
-  const [h, m] = t.split(':').map(Number);
-  return h * 60 + m;
+  const m = String(t || '').trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp][Mm])?$/);
+  if (!m) return null;
+  let h = Number(m[1]);
+  const min = Number(m[2]);
+  if (min > 59) return null;
+  if (m[3]) {
+    if (h < 1 || h > 12) return null;
+    const pm = m[3].toUpperCase() === 'PM';
+    h = (h % 12) + (pm ? 12 : 0);
+  } else if (h > 23) return null;
+  return h * 60 + min;
+}
+
+/** Any accepted time form → "HH:mm" ('' when unreadable). */
+export function normalizeTime(t?: string): string {
+  const v = timeToMinutes(t);
+  return v === null ? '' : `${pad2(Math.floor(v / 60))}:${pad2(v % 60)}`;
 }
 
 export function minutesToTime(min: number): string {

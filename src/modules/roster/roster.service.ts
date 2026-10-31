@@ -54,12 +54,13 @@ export class RosterService {
     return data;
   }
 
-  // Employees whose roster the actor can plan for a branch.
+  // Employees whose roster the actor can plan for a branch (home staff and
+  // anyone whose duty plan has hours there), with their weekly duty plan.
   async branchStaff(branch: string, actor: Actor) {
     this.assertBranch(actor, branch);
     return this.employeeModel
-      .find({ branches: branch, status: { $nin: ['resigned', 'terminated', 'inactive'] } })
-      .select('name employeeId jobPosition department photo dutyInTime dutyOutTime')
+      .find({ $or: [{ branches: branch }, { 'branchSchedules.branch': branch }], status: { $nin: ['resigned', 'terminated', 'inactive'] } })
+      .select('name employeeId jobPosition department photo branches branchSchedules dutyInTime dutyOutTime')
       .sort({ name: 1 })
       .lean();
   }

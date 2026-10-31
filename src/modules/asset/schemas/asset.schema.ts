@@ -107,6 +107,14 @@ export class Asset {
 
   @Prop({ trim: true, default: '' })
   notes: string;
+
+  // Where the stock is kept (see Asset Locations) and the exact spot there,
+  // e.g. "Rack B, shelf 2".
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'AssetLocation', default: null, index: true })
+  location?: Types.ObjectId | null;
+
+  @Prop({ trim: true, default: '' })
+  storageSpot: string;
 }
 
 export const AssetSchema = SchemaFactory.createForClass(Asset);

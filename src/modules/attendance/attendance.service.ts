@@ -1,3 +1,4 @@
+import { dutyWindow } from '../../common/helpers/duty-plan.helper';
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -26,6 +27,7 @@ import {
   isMonthStr,
   localToInstant,
   monthRange,
+  normalizeTime,
   timeToMinutes,
   todayStr,
 } from '../../common/helpers/hr-date.helper';
@@ -68,6 +70,7 @@ export class AttendanceService {
     @InjectModel(LeaveApplication.name) private readonly leaveModel: Model<LeaveApplicationDocument>,
     private readonly access: HrAccessService,
   ) {}
+
 
   private async offset() {
     return (await this.access.getConfig()).attendance.timezoneOffsetMinutes ?? 360;
@@ -241,7 +244,10 @@ export class AttendanceService {
     const overrides = await this.calendarModel.find({ dateStr: date, branchId: { $in: branchIds } }).lean();
     const override = overrides.find((o) => o.branchId !== 'global') || overrides.find((o) => o.branchId === 'global');
 
-    const profile = this.profileTimes(emp, date, cfg);
+    // The employee's duty plan (all branches / slots that weekday) sets the
+    // window; a weekday the plan leaves out is their day off.
+    const plan = dutyWindow(emp.branchSchedules, dayName(date));
+    const profile: any = plan && plan !== 'off' ? { start: plan.start, end: plan.end, source: 'profile' } : this.profileTimes(emp, date, cfg);
     // A rostered duty overrides holidays/weekly offs (Friday duty etc.).
     if (!duties.length) {
       if (override && HOLIDAY_TYPES.includes(override.dayType)) return { ...profile, dayOff: 'holiday', offTitle: override.title || 'Holiday' };
@@ -252,17 +258,15 @@ export class AttendanceService {
         const day = weekly?.schedule?.[dayName(date)];
         if (day?.dayType === 'weekly_off') return { ...profile, dayOff: 'weekend', offTitle: 'Weekly off' };
       }
+      if (plan === 'off') return { ...profile, dayOff: 'weekend', offTitle: 'Off day (duty plan)' };
     }
     return { ...profile, dayOff: null };
   }
 
   private profileTimes(emp: any, date: string, cfg: any) {
-    const dn = dayName(date);
-    const sched = (emp.branchSchedules || []).find(
-      (s: any) => s.inTime && s.outTime && (!s.days?.length || s.days.map((d: string) => d.toLowerCase()).includes(dn)),
-    );
-    if (sched) return { start: sched.inTime, end: sched.outTime, source: 'profile' };
-    if (emp.dutyInTime && emp.dutyOutTime) return { start: emp.dutyInTime, end: emp.dutyOutTime, source: 'profile' };
+    if (emp.dutyInTime && emp.dutyOutTime && normalizeTime(emp.dutyInTime) && normalizeTime(emp.dutyOutTime)) {
+      return { start: normalizeTime(emp.dutyInTime), end: normalizeTime(emp.dutyOutTime), source: 'profile' };
+    }
     return { start: cfg.attendance.defaultInTime, end: cfg.attendance.defaultOutTime, source: 'default' };
   }
 
@@ -308,6 +312,7 @@ export class AttendanceService {
       earlyLeaveMinutes: 0,
       workedMinutes: 0,
       overtimeMinutes: 0,
+      offDay: '',
       leaveTypeName: '',
       remarks: '',
       isManual: false,
@@ -354,7 +359,7 @@ export class AttendanceService {
     let outMin = outMinRaw;
     if (outMin !== null && inMin !== null && outMin < inMin) outMin += 1440;
 
-    const r: any = { isLate: false, lateMinutes: 0, isEarlyLeave: false, earlyLeaveMinutes: 0, workedMinutes: 0, overtimeMinutes: 0 };
+    const r: any = { isLate: false, lateMinutes: 0, isEarlyLeave: false, earlyLeaveMinutes: 0, workedMinutes: 0, overtimeMinutes: 0, offDay: '' };
     if (inMin === null) return { ...r, status: isPast ? 'absent' : 'present' };
 
     if (outMin !== null) r.workedMinutes = Math.max(0, outMin - inMin);
@@ -362,6 +367,7 @@ export class AttendanceService {
     if (expected.dayOff) {
       // Worked on an off day / holiday: all of it counts as overtime.
       r.overtimeMinutes = r.workedMinutes;
+      r.offDay = expected.dayOff;
       r.status = outMin === null && isPast ? 'missing_punch' : 'present';
       r.remarks = `Worked on ${expected.dayOff === 'holiday' ? 'holiday' : 'day off'}`;
       return r;
@@ -600,6 +606,7 @@ export class AttendanceService {
       earlyLeaveMinutes: zero ? 0 : metrics.earlyLeaveMinutes,
       workedMinutes: zero ? 0 : metrics.workedMinutes,
       overtimeMinutes: zero ? 0 : dto.overtimeMinutes !== undefined ? Number(dto.overtimeMinutes) || 0 : metrics.overtimeMinutes,
+      offDay: zero ? '' : (metrics as any).offDay || '',
       leaveTypeName: status === 'leave' ? dto.leaveTypeName || record?.leaveTypeName || 'Leave' : '',
       remarks: dto.remarks !== undefined ? dto.remarks : record?.remarks || '',
       isManual: true,

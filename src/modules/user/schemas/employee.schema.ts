@@ -57,6 +57,20 @@ export class Employee {
   @Prop({ required: false })
   password?: string;
 
+  // Forgot-password one-time code (HMAC of the 6 digits, never the code
+  // itself). select:false keeps these out of every normal query.
+  @Prop({ select: false })
+  resetCodeHash?: string;
+
+  @Prop({ select: false })
+  resetCodeExpires?: Date;
+
+  @Prop({ select: false, default: 0 })
+  resetCodeAttempts?: number;
+
+  @Prop({ select: false })
+  resetCodeSentAt?: Date;
+
   @Prop()
   photo?: string;
 

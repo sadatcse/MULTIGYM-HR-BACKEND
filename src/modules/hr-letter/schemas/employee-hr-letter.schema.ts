@@ -25,12 +25,9 @@ export class EmployeeHrLetter {
   })
   letterType: string;
 
-  @Prop({
-    required: true,
-    unique: true,
-    trim: true,
-    index: true,
-  })
+  // Shared by every version of a letter (v1, reissued v2, ...); unique
+  // together with `version` (see indexes below).
+  @Prop({ required: true, trim: true })
   letterNumber: string;
 
   @Prop({ required: true, trim: true })
@@ -94,6 +91,9 @@ export class EmployeeHrLetter {
       letterType: string;
       letterNumber: string;
       letterDate: string;
+      letterDateDisplay?: string;
+      effectiveDate?: string;
+      effectiveDateDisplay?: string;
       titleBangla: string;
       titleEnglish?: string;
       subject: string;
@@ -170,9 +170,28 @@ export class EmployeeHrLetter {
 
   @Prop({ default: Date.now })
   generatedAt: Date;
+
+  // Set when a draft is issued (or immediately for letters created issued).
+  @Prop({ type: Date, default: null })
+  issuedAt?: Date | null;
+
+  @Prop({ type: Object, default: null })
+  updatedBy?: { id: Types.ObjectId; name: string; role: string } | null;
+
+  // Issued letters are voided instead of deleted so the memo number and
+  // its history stay on record.
+  @Prop({ type: Date, default: null })
+  cancelledAt?: Date | null;
+
+  @Prop({ trim: true })
+  cancelReason?: string;
+
+  @Prop({ type: Object, default: null })
+  cancelledBy?: { id: Types.ObjectId; name: string; role: string } | null;
 }
 
 export const EmployeeHrLetterSchema = SchemaFactory.createForClass(EmployeeHrLetter);
 EmployeeHrLetterSchema.index({ employeeId: 1, letterType: 1 });
-EmployeeHrLetterSchema.index({ letterNumber: 1 }, { unique: true });
+EmployeeHrLetterSchema.index({ letterNumber: 1, version: 1 }, { unique: true });
+EmployeeHrLetterSchema.index({ branch: 1, status: 1, createdAt: -1 });
 EmployeeHrLetterSchema.index({ createdAt: -1 });

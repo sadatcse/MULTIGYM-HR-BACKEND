@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, SchemaTypes } from 'mongoose';
 
 export type WorkScheduleDocument = WorkSchedule & Document;
 
@@ -43,6 +43,15 @@ export class WorkSchedule {
     endTime: string;
     durationMinutes?: number;
   }>;
+
+  // single = one window every day; multi = the same slots every day;
+  // weekly = each weekday has its own slots (no slots = day off).
+  @Prop({ enum: ['single', 'multi', 'weekly'], default: 'single' })
+  scheduleMode: string;
+
+  // weekly mode: { saturday: [{ startTime, endTime }], sunday: [...], ... }
+  @Prop({ type: SchemaTypes.Mixed, default: {} })
+  weeklySlots: Record<string, Array<{ startTime: string; endTime: string }>>;
 
   @Prop({ required: true, type: Number, default: 5 })
   workDaysPerWeek: number;

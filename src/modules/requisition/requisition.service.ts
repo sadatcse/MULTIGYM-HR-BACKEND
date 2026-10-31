@@ -6,6 +6,7 @@ import { Requisition, RequisitionDocument } from './schemas/requisition.schema';
 import { Actor, HrAccessService } from '../hr-config/hr-access.service';
 import { createWithRefNo } from '../../common/helpers/ref-no.helper';
 import { isDateStr, todayStr } from '../../common/helpers/hr-date.helper';
+import { buildChain, roleKey, stepAccess, stepRoleKeys } from '../hr-config/approval-tree';
 
 type Action = 'verify' | 'approve' | 'reject' | 'order' | 'purchase' | 'receive' | 'cancel';
 
@@ -36,6 +37,12 @@ export class RequisitionService {
     const isRequester = req.requestedBy?.id === actor.id;
     const branchLead = actor.scope === 'branch' && actor.branches.includes(req.branch);
     const out: Action[] = [];
+    if (req.approvalChain?.length && ['submitted', 'verified'].includes(req.status)) {
+      const step = this.stepFor(req, actor);
+      if (step.can) out.push(step.final ? 'approve' : 'verify', 'reject');
+      if (isRequester || actor.scope === 'all') out.push('cancel');
+      return [...new Set(out)];
+    }
     switch (req.status) {
       case 'submitted':
         if (r.admin) out.push('verify', 'reject');
@@ -78,8 +85,17 @@ export class RequisitionService {
     });
   }
 
-  private push(doc: any, action: string, remarks: string, actor: Actor) {
-    doc.timeline.push({ action, status: doc.status, remarks: remarks || '', by: { id: actor.id, name: actor.name, role: actor.role }, at: new Date() });
+  // Tree workflow: may the actor verify / approve at the current level?
+  // Not on one's own requisition, and once per person.
+  private stepFor(req: any, actor: Actor) {
+    const none = { can: false, final: false, label: '' };
+    if (req.requestedBy?.id === actor.id && !actor.isSuperAdmin) return none;
+    if (!actor.isSuperAdmin && (req.timeline || []).some((t: any) => ['verify', 'approve'].includes(t.action) && t.by?.id === actor.id)) return none;
+    return stepAccess(req.approvalChain, req.currentStep || 0, req.branch, actor);
+  }
+
+  private push(doc: any, action: string, remarks: string, actor: Actor, stepLabel = '') {
+    doc.timeline.push({ action, status: doc.status, remarks: remarks || '', ...(stepLabel ? { stepLabel } : {}), by: { id: actor.id, name: actor.name, role: actor.role }, at: new Date() });
     doc.markModified('timeline');
   }
 
@@ -91,6 +107,9 @@ export class RequisitionService {
     if (!dto.title || !String(dto.title).trim()) throw new BadRequestException('Title is required');
     if (dto.requiredBy && !isDateStr(dto.requiredBy)) throw new BadRequestException('Required-by date must be YYYY-MM-DD');
     const items = this.cleanItems(dto.items);
+    // Route from the management tree (by the requester's role); without a
+    // saved tree the original admin -> management stages apply.
+    const chain = buildChain((await this.access.getConfig()).managementTree, actor.role);
     const doc: any = await createWithRefNo(this.model, 'requisitionNo', 'REQ', {
       title: String(dto.title).trim(),
       branch,
@@ -103,6 +122,10 @@ export class RequisitionService {
       estimatedTotal: round(items.reduce((s, i) => s + i.quantity * i.estimatedUnitPrice, 0)),
       attachments: (dto.attachments || []).filter((a: any) => a?.url),
       status: 'submitted',
+      approvalChain: chain,
+      currentStep: 0,
+      pendingRoles: stepRoleKeys(chain[0]),
+      finalRoles: stepRoleKeys(chain[chain.length - 1]),
       timeline: [],
     });
     this.push(doc, 'submitted', dto.purpose || '', actor);
@@ -160,14 +183,29 @@ export class RequisitionService {
   // Requisitions waiting on this actor's role.
   async pendingForMe(actor: Actor) {
     const r = await this.roles(actor);
-    const statuses: string[] = [];
-    if (r.admin) statuses.push('submitted');
-    if (r.management) statuses.push('submitted', 'verified');
-    if (r.purchase) statuses.push('approved');
-    if (!statuses.length) return [];
-    const filter: any = { status: { $in: [...new Set(statuses)] } };
+    const noRoute = { 'approvalChain.0': { $exists: false } };
+    const or: any[] = [];
+    // Fixed stages (raised before a tree was saved).
+    const legacy: string[] = [];
+    if (r.admin) legacy.push('submitted');
+    if (r.management) legacy.push('submitted', 'verified');
+    if (legacy.length) or.push({ ...noRoute, status: { $in: [...new Set(legacy)] } });
+    // Tree route: waiting on this role's level (or its final decision).
+    const me = roleKey(actor.role);
+    or.push({
+      'approvalChain.0': { $exists: true },
+      status: { $in: ['submitted', 'verified'] },
+      ...(actor.isSuperAdmin ? {} : { $or: [{ pendingRoles: me }, { finalRoles: me }] }),
+    });
+    // Purchasing after approval.
+    if (r.purchase) or.push({ status: 'approved' });
+
+    const filter: any = { $or: or };
     if (actor.scope === 'branch') filter.branch = { $in: actor.branches };
-    return this.model.find(filter).sort({ createdAt: 1 }).lean();
+    const rows = await this.model.find(filter).sort({ createdAt: 1 }).lean();
+    const out: any[] = [];
+    for (const doc of rows) if ((await this.availableActions(doc, actor)).some((a) => a !== 'cancel')) out.push(doc);
+    return out;
   }
 
   async findOne(id: string, actor: Actor) {
@@ -224,9 +262,16 @@ export class RequisitionService {
     if (!allowed.includes(action)) throw new ForbiddenException(`You cannot "${action}" this requisition now`);
     const remarks = String(dto.remarks || '').trim();
 
+    const routed = doc.approvalChain?.length > 0 && ['submitted', 'verified'].includes(doc.status);
+    const step = routed ? this.stepFor(doc.toObject(), actor) : null;
     switch (action) {
       case 'verify':
         doc.status = 'verified';
+        if (routed) {
+          // Hand over to the next level up the tree.
+          doc.currentStep = (doc.currentStep || 0) + 1;
+          doc.pendingRoles = stepRoleKeys(doc.approvalChain[doc.currentStep]);
+        }
         break;
       case 'approve': {
         const amount = round(dto.approvedAmount ?? doc.estimatedTotal);
@@ -251,11 +296,16 @@ export class RequisitionService {
           doc.markModified('items');
         }
         doc.status = 'approved';
+        if (routed) {
+          doc.currentStep = doc.approvalChain.length;
+          doc.pendingRoles = [];
+        }
         break;
       }
       case 'reject':
         if (!remarks) throw new BadRequestException('A reason is required to reject');
         doc.status = 'rejected';
+        doc.pendingRoles = [];
         break;
       case 'order':
         doc.purchaseStatus = 'ordered';
@@ -294,9 +344,10 @@ export class RequisitionService {
       }
       case 'cancel':
         doc.status = 'cancelled';
+        doc.pendingRoles = [];
         break;
     }
-    this.push(doc, action, remarks, actor);
+    this.push(doc, action, remarks, actor, step?.can && ['verify', 'approve', 'reject'].includes(action) ? step.label : '');
     await doc.save();
     return doc;
   }

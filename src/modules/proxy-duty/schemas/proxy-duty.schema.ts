@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, SchemaTypes, Types } from 'mongoose';
 
 export type ProxyDutyDocument = ProxyDuty & Document;
 
@@ -28,6 +28,29 @@ export class ProxyDuty {
 
   @Prop({ trim: true, default: '' })
   remarks: string;
+
+  // proxy = covers someone (paid proxyPayAmount); swap = two people exchange duties.
+  @Prop({ enum: ['proxy', 'swap'], default: 'proxy', index: true })
+  type: string;
+
+  // swap only: the date the original employee works in return.
+  @Prop({ trim: true, default: '' })
+  swapDate: string;
+
+  @Prop({ type: Types.ObjectId, ref: 'Employee', default: null })
+  originalEmployee: Types.ObjectId | null;
+
+  @Prop({ type: Types.ObjectId, ref: 'Employee', default: null })
+  proxyEmployee: Types.ObjectId | null;
+
+  @Prop({ trim: true, default: '', index: true })
+  branch: string;
+
+  @Prop({ trim: true, default: '' })
+  department: string;
+
+  @Prop({ type: SchemaTypes.Mixed, default: null })
+  createdBy: { id: string; name: string } | null;
 }
 
 export const ProxyDutySchema = SchemaFactory.createForClass(ProxyDuty);

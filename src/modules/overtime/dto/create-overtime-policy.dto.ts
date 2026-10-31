@@ -21,6 +21,16 @@ export class CreateOvertimePolicyDto {
   minOvertimeMinutes?: number;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  offDayRate?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  roundingMinutes?: number;
+
+  @IsOptional()
   @IsEnum(['active', 'inactive'])
   status?: string;
 }

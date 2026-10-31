@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import { randomBytes } from 'crypto';
 import { Employee, EmployeeDocument } from '../user/schemas/employee.schema';
 import { DEFAULT_HR_CONFIG, HrConfig, HrConfigDocument } from './schemas/hr-config.schema';
+import { cleanTree } from './approval-tree';
 
 export type AccessScope = 'all' | 'branch' | 'self';
 
@@ -48,6 +49,8 @@ export class HrAccessService {
       requisitionStages: { ...DEFAULT_HR_CONFIG.requisitionStages, ...(doc.requisitionStages || {}) },
       attendance: { ...DEFAULT_HR_CONFIG.attendance, ...(doc.attendance || {}) },
       payroll: { ...DEFAULT_HR_CONFIG.payroll, ...(doc.payroll || {}) },
+      decisionTree: Array.isArray(doc.decisionTree) ? doc.decisionTree : [],
+      managementTree: Array.isArray(doc.managementTree) ? doc.managementTree : [],
       deviceApiKey: doc.deviceApiKey || '',
     };
     this.cache = { value: merged, at: Date.now() };
@@ -77,6 +80,10 @@ export class HrAccessService {
     if (stages(p.leaveStages, ['branch', 'hr', 'director'])) $set.leaveStages = stages(p.leaveStages, ['branch', 'hr', 'director']);
     if (typeof p.leaveSkipBranchStage === 'boolean') $set.leaveSkipBranchStage = p.leaveSkipBranchStage;
     if (stages(p.requisitionStages, ['admin', 'management', 'purchase'])) $set.requisitionStages = stages(p.requisitionStages, ['admin', 'management', 'purchase']);
+    const decisionTree = cleanTree(p.decisionTree);
+    if (decisionTree) $set.decisionTree = decisionTree;
+    const managementTree = cleanTree(p.managementTree);
+    if (managementTree) $set.managementTree = managementTree;
     const att = nums(p.attendance, ['graceMinutes', 'earlyLeaveToleranceMinutes', 'halfDayMinutes', 'overtimeAfterMinutes', 'minPunchGapMinutes', 'timezoneOffsetMinutes'], ['defaultInTime', 'defaultOutTime']);
     if (att) $set.attendance = { ...cur.attendance, ...att };
     const pay = nums(p.payroll, ['standardHoursPerDay'], ['perDayBasis', 'daysBasis', 'currency']);
