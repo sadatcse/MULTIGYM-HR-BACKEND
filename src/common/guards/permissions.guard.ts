@@ -62,9 +62,10 @@ export class PermissionsGuard implements CanActivate {
       permissions = undefined; // role has no permission document yet
     }
 
-    const entry = permissions?.[required.moduleKey];
-    if (entry != null && entry[required.action] != null) {
-      if (!entry[required.action]) this.deny(roleUpper, required);
+    const keys = Array.isArray(required.moduleKey) ? required.moduleKey : [required.moduleKey];
+    const configured = keys.map((k) => permissions?.[k]).filter((e): e is Record<string, boolean> => e != null && e[required.action] != null);
+    if (configured.length) {
+      if (!configured.some((e) => e[required.action])) this.deny(roleUpper, required);
       return true;
     }
 
@@ -74,11 +75,12 @@ export class PermissionsGuard implements CanActivate {
     // except self-service pages — otherwise an unconfigured role such as
     // "user" could create/edit/delete employees and escalate to admin.
     const scope = await this.access.scopeForRole(roleUpper);
-    if (scope === 'self' && !SELF_SERVICE_KEYS.has(required.moduleKey)) this.deny(roleUpper, required);
+    if (scope === 'self' && !keys.some((k) => SELF_SERVICE_KEYS.has(k))) this.deny(roleUpper, required);
     return true;
   }
 
   private deny(role: string, required: RequiredPermission): never {
-    throw new ForbiddenException(`Role "${role}" does not have "${required.action}" permission for "${required.moduleKey}".`);
+    const keys = [required.moduleKey].flat().join('" or "');
+    throw new ForbiddenException(`Role "${role}" does not have "${required.action}" permission for "${keys}".`);
   }
 }

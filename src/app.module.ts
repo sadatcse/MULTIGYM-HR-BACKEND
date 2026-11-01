@@ -28,6 +28,7 @@ import { ChatModule } from './modules/chat/chat.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { AssetTypeModule } from './modules/asset-type/asset-type.module';
 import { AssetLocationModule } from './modules/asset-location/asset-location.module';
+import { GymAssetModule } from './modules/gym-asset/gym-asset.module';
 import { AssetModule } from './modules/asset/asset.module';
 import { AssetAssignmentModule } from './modules/asset-assignment/asset-assignment.module';
 import { AssetTransactionModule } from './modules/asset-transaction/asset-transaction.module';
@@ -101,6 +102,7 @@ import { HrDashboardModule } from './modules/hr-dashboard/hr-dashboard.module';
     UploadModule,
     AssetTypeModule,
     AssetLocationModule,
+    GymAssetModule,
     AssetModule,
     AssetAssignmentModule,
     AssetTransactionModule,
