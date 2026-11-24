@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { RequestMethod, ValidationPipe } from '@nestjs/common';
-import { NextFunction, Request, Response, text } from 'express';
+import { Request, text } from 'express';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import helmet from 'helmet';
@@ -10,16 +10,12 @@ import rateLimit from 'express-rate-limit';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
-// The website folder (index.html, robots.txt). The build copies it into
+// The website folder (index.html). The build copies it into
 // dist/website (hosts that publish only dist/ still get it); Vercel runs
 // src/main.ts directly and reads Backend/website.
 const WEBSITE_DIR =
   [join(__dirname, 'website'), join(__dirname, '..', 'website')].find((d) => existsSync(join(d, 'index.html'))) ??
   join(__dirname, 'website');
-
-// Search engine, SEO tool and AI crawler user agents.
-const CRAWLER_UA =
-  /googlebot|google-extended|googleother|bingbot|bingpreview|msnbot|slurp|duckduckbot|duckassistbot|baiduspider|yandex|sogou|exabot|seznambot|naver|applebot|amazonbot|facebookexternalhit|facebot|meta-externalagent|meta-externalfetcher|ia_archiver|archive\.org_bot|semrush|ahrefs|mj12bot|dotbot|rogerbot|screaming frog|petalbot|bytespider|gptbot|chatgpt-user|oai-searchbot|claudebot|claude-web|claude-user|claude-searchbot|anthropic-ai|perplexitybot|perplexity-user|ccbot|cohere-ai|diffbot|youbot|imagesiftbot|omgili|timpibot|mistralai-user|ai2bot|scrapy|\bcrawler\b|\bspider\b/i;
 
 // Builds and configures the Nest app without starting a listener, so it can
 // be reused both by the local dev server (bootstrap() below, which calls
@@ -36,19 +32,6 @@ export async function createApp() {
   // address in `do-connecting-ip` (the X-Forwarded-For chain can hold extra
   // proxy hops); anywhere else req.ip is the visitor.
   const visitorIp = (req: Request) => String(req.headers['do-connecting-ip'] || req.ip || '');
-
-  // No SEO: this is a private server. Every response tells search engines and
-  // AI crawlers not to index, follow, cache or train on it, and known crawler
-  // user agents are refused outright (they may still read /robots.txt, which
-  // disallows everything).
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive, nosnippet, noimageindex, noai, noimageai');
-    if (req.path !== '/robots.txt' && CRAWLER_UA.test(String(req.headers['user-agent'] || ''))) {
-      res.status(403).type('text/plain').send('Forbidden');
-      return;
-    }
-    next();
-  });
 
   // Security middleware
   app.use(
@@ -135,7 +118,7 @@ export async function createApp() {
   // raw body as text before Nest's JSON/urlencoded parsers see it.
   app.use('/iclock', text({ type: '*/*', limit: '5mb' }));
 
-  // Static site (index.html, robots.txt) from the Backend/website folder.
+  // Static site (index.html) from the Backend/website folder.
   app.useStaticAssets(WEBSITE_DIR);
 
   // Device firmware hardcodes /iclock/*, so those stay outside /api.
