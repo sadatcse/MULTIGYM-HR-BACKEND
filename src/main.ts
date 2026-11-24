@@ -10,11 +10,12 @@ import rateLimit from 'express-rate-limit';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
-// Backend/website. Compiled code runs from dist/ (one level down), and so does
-// Vercel running src/main.ts directly. The two-level path covers older dist/src builds.
-const WEBSITE_DIR = [join(__dirname, '..', '..', 'website'), join(__dirname, '..', 'website')].find((d) =>
-  existsSync(join(d, 'index.html')),
-) ?? join(__dirname, '..', 'website');
+// The website folder (index.html, robots.txt). The build copies it into
+// dist/website (hosts that publish only dist/ still get it); Vercel runs
+// src/main.ts directly and reads Backend/website.
+const WEBSITE_DIR =
+  [join(__dirname, 'website'), join(__dirname, '..', 'website')].find((d) => existsSync(join(d, 'index.html'))) ??
+  join(__dirname, 'website');
 
 // Search engine, SEO tool and AI crawler user agents.
 const CRAWLER_UA =
