@@ -149,11 +149,16 @@ async function bootstrap() {
   console.log(`Server started at ${new Date()}`);
 }
 
-// Only start a listening server when this file is run directly (local dev /
-// a traditional Node host). api/index.ts imports createApp() from this same
-// file for the Vercel serverless path, and importing a module always runs
-// its top-level code — this guard is what stops that import from also
-// calling app.listen() on a platform that doesn't support it.
-if (require.main === module) {
-  bootstrap();
+// Start a listening server everywhere except Vercel. On Vercel, api/index.ts
+// imports createApp() and serves requests itself; a serverless function can't
+// call app.listen(). Vercel sets VERCEL=1 at runtime.
+//
+// Don't rely on `require.main === module` alone: Hostinger (Passenger /
+// LiteSpeed style hosting) loads this file through its own loader with
+// require(), so that check is false there and the server would never start.
+if (require.main === module || !process.env.VERCEL) {
+  bootstrap().catch((err) => {
+    console.error('Server failed to start:', err);
+    process.exit(1);
+  });
 }

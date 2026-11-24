@@ -2,6 +2,7 @@
   "name": "hr_manager_backend",
   "version": "1.0.0",
   "description": "",
+  "main": "dist/main.js",
   "author": "Md Sadat Khan",
   "license": "MIT",
   "scripts": {
