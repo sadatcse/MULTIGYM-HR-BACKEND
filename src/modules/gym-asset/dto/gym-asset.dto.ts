@@ -293,6 +293,23 @@ export class UpdateMaintenanceDto {
   @IsOptional() @IsString() @MaxLength(1000) remarks?: string;
 }
 
+// One click "done" for a scheduled maintenance: logs today's service, schedules the next.
+export class CompleteDueDto extends Idempotent {
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0, { message: "Cost can't be negative" })
+  cost?: number;
+
+  // Defaults to today + the same interval as last time; '' = no next date.
+  @IsOptional()
+  @ValidateIf((o) => o.nextMaintenanceDate !== '')
+  @IsDateString({}, { message: 'Next maintenance date is not a valid date' })
+  nextMaintenanceDate?: string;
+
+  @IsOptional() @IsString() @MaxLength(1000) remarks?: string;
+}
+
 export class CreateDisposalDto extends Idempotent {
   @IsMongoId({ message: 'Pick the asset to dispose' })
   asset: string;

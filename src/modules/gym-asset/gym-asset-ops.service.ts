@@ -3,7 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Actor, actorRef, escapeRegex, GymAssetCoreService, round2, toDate, valuesOf } from './gym-asset-core.service';
 import { GymAssetDisposal, GymAssetDisposalDocument, GymAssetMaintenance, GymAssetMaintenanceDocument, GymAssetTransfer, GymAssetTransferDocument } from './schemas/gym-asset-records.schema';
-import { CreateDisposalDto, CreateMaintenanceDto, CreateTransferDto, UpdateDisposalDto, UpdateMaintenanceDto } from './dto/gym-asset.dto';
+import { CompleteDueDto, CreateDisposalDto, CreateMaintenanceDto, CreateTransferDto, UpdateDisposalDto, UpdateMaintenanceDto } from './dto/gym-asset.dto';
 
 const isDup = (e: any) => e?.code === 11000;
 const label = (s: string) => s.replace(/_/g, ' ');
@@ -273,6 +273,151 @@ export class GymAssetOpsService {
         } else {
           await this.core.log({ asset: asset._id, assetCode: asset.assetCode, event: 'maintenance_logged', message: `Maintenance logged (${label(dto.maintenanceType)}), waiting to start: ${dto.problem.trim()}`, ref: maintenanceId, by }, session);
         }
+        return record;
+      });
+    } catch (e) {
+      if (isDup(e) && dto.requestId) {
+        const existing = await this.maintenanceModel.findOne({ requestId: dto.requestId }).lean();
+        if (existing) return existing;
+      }
+      throw e;
+    }
+  }
+
+  // ---------------------------------------------------------------- schedule (next due)
+  /**
+   * Each active asset's next scheduled maintenance: the next date on its most
+   * recent (not cancelled) maintenance record. Assets whose latest record is
+   * still open are left out (the work is already under way).
+   */
+  async listDue(q: Record<string, any>) {
+    const today = new Date(`${new Date(Date.now() + 6 * 3600 * 1000).toISOString().slice(0, 10)}T00:00:00.000Z`);
+    const DAY = 24 * 3600 * 1000;
+    const latest = await this.maintenanceModel.aggregate([
+      { $match: { status: { $ne: 'cancelled' } } },
+      { $sort: { maintenanceDate: -1, createdAt: -1 } },
+      { $group: { _id: '$asset', rec: { $first: '$$ROOT' } } },
+      { $replaceRoot: { newRoot: '$rec' } },
+      { $match: { status: 'completed', nextMaintenanceDate: { $ne: null } } },
+    ]);
+    const assetFilter: Record<string, any> = { _id: { $in: latest.map((r) => r.asset) }, status: 'active' };
+    for (const key of ['location', 'category'] as const) {
+      if (!q[key] || q[key] === 'all') continue;
+      if (!Types.ObjectId.isValid(q[key])) throw new BadRequestException(`Invalid ${key}`);
+      assetFilter[key] = new Types.ObjectId(q[key]);
+    }
+    if (q.search?.trim()) {
+      const re = { $regex: escapeRegex(q.search.trim()), $options: 'i' };
+      assetFilter.$or = [{ assetCode: re }, { name: re }, { brand: re }, { modelNumber: re }];
+    }
+    const assets = await this.core.assetModel
+      .find(assetFilter)
+      .select('assetCode name category location place condition quantity unit')
+      .populate('category', 'name')
+      .populate('location', 'name')
+      .populate('place', 'name')
+      .lean();
+    const byAsset = new Map(assets.map((a: any) => [String(a._id), a]));
+    const all = latest
+      .filter((r) => byAsset.has(String(r.asset)))
+      .map((r) => {
+        const daysLeft = Math.round((new Date(r.nextMaintenanceDate).getTime() - today.getTime()) / DAY);
+        const bucket = daysLeft < 0 ? 'overdue' : daysLeft <= 7 ? 'week' : daysLeft <= 30 ? 'month' : 'later';
+        const interval = r.maintenanceDate ? Math.round((new Date(r.nextMaintenanceDate).getTime() - new Date(r.maintenanceDate).getTime()) / DAY) : 0;
+        return {
+          asset: byAsset.get(String(r.asset)),
+          dueDate: r.nextMaintenanceDate,
+          daysLeft,
+          bucket,
+          intervalDays: interval > 0 ? interval : 0,
+          last: { _id: r._id, maintenanceId: r.maintenanceId, maintenanceType: r.maintenanceType, maintenanceDate: r.maintenanceDate, completionDate: r.completionDate, serviceProvider: r.serviceProvider, technician: r.technician, cost: r.cost },
+        };
+      })
+      .sort((a, b) => a.daysLeft - b.daysLeft);
+    const summary = { overdue: 0, week: 0, month: 0, later: 0, total: all.length };
+    for (const r of all) summary[r.bucket] += 1;
+    const window = q.window || 'all';
+    const limit = { overdue: -1, week: 7, month: 30, quarter: 90 }[window as 'overdue' | 'week' | 'month' | 'quarter'];
+    const data = window === 'all' ? all : all.filter((r) => (window === 'overdue' ? r.daysLeft < 0 : r.daysLeft >= 0 && r.daysLeft <= limit));
+    return { data, summary, total: data.length };
+  }
+
+  /**
+   * "Done" on a scheduled maintenance: records the service as completed today
+   * and books the next one (by default the same interval as last time).
+   */
+  async completeDue(recordId: string, dto: CompleteDueDto, actor: Actor) {
+    if (dto.requestId) {
+      const existing = await this.maintenanceModel.findOne({ requestId: dto.requestId }).lean();
+      if (existing) return existing;
+    }
+    const source = Types.ObjectId.isValid(recordId) ? await this.maintenanceModel.findById(recordId).lean() : null;
+    if (!source) throw new NotFoundException('Maintenance record not found');
+    if (!source.nextMaintenanceDate) throw new BadRequestException(`${source.maintenanceId} has no next maintenance date`);
+    const dueOn = new Date(source.nextMaintenanceDate);
+    const today = new Date(`${new Date(Date.now() + 6 * 3600 * 1000).toISOString().slice(0, 10)}T00:00:00.000Z`);
+    const DAY = 24 * 3600 * 1000;
+    let next: Date | undefined;
+    if (dto.nextMaintenanceDate === '') next = undefined;
+    else if (dto.nextMaintenanceDate) next = toDate(dto.nextMaintenanceDate);
+    else {
+      const interval = Math.round((dueOn.getTime() - new Date(source.maintenanceDate).getTime()) / DAY);
+      next = interval > 0 ? new Date(today.getTime() + interval * DAY) : undefined;
+    }
+    if (next && next <= today) throw new BadRequestException('The next maintenance date must be after today');
+    const by = actorRef(actor);
+
+    try {
+      return await this.core.inTransaction(async (session) => {
+        const asset = await this.core.activeAsset(String(source.asset), session);
+        const open = await this.openMaintenance(asset._id);
+        if (open) throw new BadRequestException(`${asset.assetCode} already has open maintenance (${open}). Complete that record instead.`);
+        const newer = await this.maintenanceModel.exists({ asset: asset._id, status: { $ne: 'cancelled' }, _id: { $ne: source._id }, $or: [{ maintenanceDate: { $gt: source.maintenanceDate } }, { maintenanceDate: source.maintenanceDate, createdAt: { $gt: (source as any).createdAt } }] });
+        if (newer) throw new BadRequestException('This schedule was already handled by a newer maintenance record. Reload the list.');
+        const names = await this.core.namesOf([String(asset.location)], [String(asset.place)]);
+        const maintenanceId = await this.core.nextId('MNT', session);
+        const condition = ['damaged', 'non_functional', 'under_maintenance'].includes(asset.condition) ? 'good' : asset.condition;
+        const [record] = await this.maintenanceModel.create(
+          [
+            {
+              maintenanceId,
+              asset: asset._id,
+              assetCode: asset.assetCode,
+              assetName: asset.name,
+              location: { id: String(asset.location), name: names.location.get(String(asset.location)) || '—' },
+              place: { id: String(asset.place), name: names.place.get(String(asset.place)) || '—' },
+              problem: `Scheduled ${label(source.maintenanceType)} (was due ${dueOn.toISOString().slice(0, 10)})`,
+              maintenanceType: source.maintenanceType,
+              serviceProvider: source.serviceProvider || '',
+              technician: source.technician || '',
+              maintenanceDate: today,
+              completionDate: today,
+              cost: dto.cost || 0,
+              nextMaintenanceDate: next,
+              status: 'completed',
+              attachments: [],
+              remarks: (dto.remarks || '').trim(),
+              conditionBefore: asset.condition,
+              conditionAfter: condition,
+              requestId: dto.requestId,
+              by,
+            },
+          ],
+          { session },
+        );
+        if (condition !== asset.condition) await this.core.assetModel.updateOne({ _id: asset._id }, { $set: { condition, updatedBy: by } }, { session });
+        await this.core.log(
+          {
+            asset: asset._id,
+            assetCode: asset.assetCode,
+            event: 'maintenance_completed',
+            message: `Scheduled ${label(source.maintenanceType)} done${dto.cost ? `, cost ${dto.cost}` : ''}. ${next ? `Next due ${next.toISOString().slice(0, 10)}.` : 'No next date set.'}`,
+            ref: maintenanceId,
+            changes: condition !== asset.condition ? [{ field: 'Condition', from: asset.condition, to: condition }] : [],
+            by,
+          },
+          session,
+        );
         return record;
       });
     } catch (e) {

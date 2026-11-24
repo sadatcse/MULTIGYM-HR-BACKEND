@@ -216,6 +216,9 @@ export const EmployeeSchema = SchemaFactory.createForClass(Employee);
 EmployeeSchema.index({ status: 1 });
 EmployeeSchema.index({ branches: 1, status: 1 });
 EmployeeSchema.index({ name: 1 });
+// One employee per mobile number (it is also a login ID); employees without
+// a number are not indexed.
+EmployeeSchema.index({ mobileNumber: 1 }, { unique: true, partialFilterExpression: { mobileNumber: { $type: 'string', $gt: '' } } });
 
 // Hash password before saving if password is supplied & modified
 EmployeeSchema.pre('save', async function (next) {

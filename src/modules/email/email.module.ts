@@ -1,8 +1,7 @@
 import { Module } from '@nestjs/common';
 import { EmailService } from './email.service';
 
-// Provides EmailService to other modules (password reset). EmailController
-// (POST /email/test) is deliberately not registered here.
+// Provides EmailService to other modules (password reset).
 @Module({
   providers: [EmailService],
   exports: [EmailService],

@@ -42,9 +42,10 @@ export class EmployeeController {
   async login(@Body() dto: LoginEmployeeDto, @Res({ passthrough: true }) res: Response) {
     res.locals.transactionMeta = { userEmail: dto.email || 'Unknown Employee' };
 
-    const employee = await this.employeeService.findByEmail(dto.email);
+    // `email` holds whatever was typed: an email address or a mobile number.
+    const employee = await this.employeeService.findByLogin(dto.email);
     if (!employee) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException('Invalid email / mobile number or password');
     }
 
     res.locals.transactionMeta.userName = employee.name;
@@ -55,7 +56,7 @@ export class EmployeeController {
 
     const isMatch = await employee.comparePassword(dto.password);
     if (!isMatch) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException('Invalid email / mobile number or password');
     }
 
     const token = await this.jwtService.signAsync(

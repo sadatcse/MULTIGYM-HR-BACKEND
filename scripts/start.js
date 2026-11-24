@@ -8,7 +8,7 @@ const path = require('path');
 
 const production = (process.env.NODE_ENV || '').trim() === 'production';
 const args = production
-  ? [path.join(__dirname, '..', 'dist', 'src', 'main.js')]
+  ? [path.join(__dirname, '..', 'dist', 'main.js')]
   : [require.resolve('@nestjs/cli/bin/nest.js'), 'start', ...process.argv.slice(2)];
 
 const child = spawn(process.execPath, args, { stdio: 'inherit' });

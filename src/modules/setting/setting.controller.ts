@@ -21,6 +21,28 @@ export class SettingController {
     };
   }
 
+  // The company logo as a data URL, for documents rendered in the browser
+  // (PDF reports): the logo's storage host sends no CORS headers, so the page
+  // can't read the image itself. Only ever fetches the logo saved in settings.
+  @Get('logo')
+  async getLogo() {
+    const { logo } = await this.settingService.getSettings();
+    let data: string | null = null;
+    if (logo && /^https:\/\//.test(logo)) {
+      try {
+        const res = await (globalThis as any).fetch(logo, { signal: AbortSignal.timeout(8000) });
+        const type = String(res.headers.get('content-type') || '');
+        const bytes = Buffer.from(await res.arrayBuffer());
+        if (res.ok && /^image\/(png|jpe?g|webp|gif|svg\+xml)/.test(type) && bytes.length <= 2 * 1024 * 1024) {
+          data = `data:${type.split(';')[0]};base64,${bytes.toString('base64')}`;
+        }
+      } catch {
+        data = null; // documents fall back to the company initials
+      }
+    }
+    return { statusCode: HttpStatus.OK, data };
+  }
+
   @Put()
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard, PermissionsGuard)

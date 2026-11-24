@@ -17,6 +17,7 @@ import { ChangePasswordEmployeeDto } from './dto/change-password-employee.dto';
 import { S3Service } from '../upload/s3.service';
 import { EmployeeHistoryService, snapshotOf } from '../employee-history/employee-history.service';
 import { Actor, HrAccessService, normalizeRole } from '../hr-config/hr-access.service';
+import { looksLikeMobile, mobileVariants, normalizeMobile } from '../../common/helpers/mobile.helper';
 
 // Fields safe to show any colleague (pickers, chat, other-branch lookups).
 const LITE_FIELDS = 'name employeeId photo jobPosition department branches status role';
@@ -155,11 +156,42 @@ export class EmployeeService {
     return this.employeeModel.findOne({ email });
   }
 
+  /** Login lookup: an email address or a mobile number (any common spelling). */
+  async findByLogin(login: string) {
+    const value = String(login || '').trim();
+    if (looksLikeMobile(value)) {
+      const mobile = normalizeMobile(value);
+      return mobile ? this.employeeModel.findOne({ mobileNumber: { $in: mobileVariants(mobile) } }) : null;
+    }
+    return this.employeeModel.findOne({ email: value.toLowerCase() });
+  }
+
+  /**
+   * Validates and normalises a mobile number and makes sure no other employee
+   * has it. `required` is for new employees; an update may leave it unset.
+   */
+  private async cleanMobile(value: unknown, { required, exceptId }: { required: boolean; exceptId?: string }) {
+    const raw = String(value ?? '').trim();
+    if (!raw) {
+      if (required) throw new BadRequestException('Mobile number is required');
+      return '';
+    }
+    const mobile = normalizeMobile(raw);
+    if (!mobile) throw new BadRequestException('Enter a valid mobile number, e.g. 01711234567');
+    const clash = await this.employeeModel
+      .findOne({ mobileNumber: { $in: mobileVariants(mobile) }, ...(exceptId ? { _id: { $ne: exceptId } } : {}) })
+      .select('name employeeId')
+      .lean();
+    if (clash) throw new ConflictException(`Mobile number ${mobile} already belongs to ${clash.name}${clash.employeeId ? ` (${clash.employeeId})` : ''}`);
+    return mobile;
+  }
+
   async create(createDto: CreateEmployeeDto, actor?: { id: string; name: string; role: string }) {
     const existing = await this.employeeModel.findOne({ email: createDto.email });
     if (existing) {
       throw new BadRequestException('Email already exists');
     }
+    createDto.mobileNumber = await this.cleanMobile(createDto.mobileNumber, { required: true });
 
     if (!createDto.employeeId) {
       const count = await this.employeeModel.countDocuments();
@@ -200,6 +232,11 @@ export class EmployeeService {
       throw new NotFoundException('Employee not found');
     }
 
+    if (updateDto.mobileNumber !== undefined) {
+      // Clearing a number someone already has is not allowed: it is their login ID.
+      updateDto.mobileNumber = await this.cleanMobile(updateDto.mobileNumber, { required: !!employee.mobileNumber, exceptId: id });
+    }
+
     const previousPhoto = employee.photo;
     const before = snapshotOf(employee);
     const skipHistory = !!(updateDto as any).skipHistory;
@@ -228,7 +265,7 @@ export class EmployeeService {
       return response;
     } catch (err: any) {
       if (err.code === 11000) {
-        throw new ConflictException('An error occurred: email or employee ID may already be in use.');
+        throw new ConflictException('This email, mobile number or employee ID is already in use by another employee.');
       }
       console.error('Error updating employee:', err);
       throw new BadRequestException(err.message || 'An error occurred while updating the employee.');

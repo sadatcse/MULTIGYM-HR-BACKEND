@@ -8,6 +8,7 @@ import { GymAssetService } from './gym-asset.service';
 import { GymAssetOpsService } from './gym-asset-ops.service';
 import { GymAssetReportService } from './gym-asset-report.service';
 import {
+  CompleteDueDto,
   CreateCategoryDto,
   CreateDisposalDto,
   CreateGymAssetDto,
@@ -29,6 +30,7 @@ const REGISTER = 'gym-assets';
 const DETAILS = 'gym-asset-details';
 const TRANSFERS = 'gym-asset-transfers';
 const MAINTENANCE = 'gym-asset-maintenance';
+const SCHEDULE = 'gym-asset-maintenance-schedule';
 const DISPOSALS = 'gym-asset-disposals';
 const LOCATIONS = 'gym-asset-locations';
 
@@ -215,6 +217,20 @@ export class GymAssetController {
   }
 
   // ---------------------------------------------------------------- maintenance
+  @Get('maintenance/due')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission([SCHEDULE, MAINTENANCE], 'view')
+  async maintenanceDue(@Query() q: Record<string, any>) {
+    return { success: true, ...(await this.ops.listDue(q)) };
+  }
+
+  @Post('maintenance/:id/done')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission([SCHEDULE, MAINTENANCE], 'add')
+  async completeDue(@Param('id') id: string, @Body() dto: CompleteDueDto, @Req() req: any) {
+    return { success: true, message: 'Maintenance done', data: await this.ops.completeDue(id, dto, await this.actor(req)) };
+  }
+
   @Get('maintenance')
   @UseGuards(PermissionsGuard)
   @RequirePermission([MAINTENANCE, REGISTER, DETAILS], 'view')
